@@ -1,0 +1,10 @@
+[project]
+name = "incerto"
+version = "0.1.0"
+description = "A library for uncertainty quantification in machine learning"
+authors = [{ name="Stephan Rabanser", email="stephan@cs.toronto.edu" }]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = []
