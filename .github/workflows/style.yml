@@ -1,0 +1,24 @@
+name: style
+on: [push, pull_request]
+
+jobs:
+  black:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Choose the same Python you use locally
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # Cache speeds repeated runs (optional)
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Run *all* hooks, but only on the files in the PR/commit
+      - uses: pre-commit/action@v3.0.1 :contentReference[oaicite:1]{index=1}
+        with:
+          extra_args: --all-files        # ensure full tree is checked
