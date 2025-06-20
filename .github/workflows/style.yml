@@ -19,6 +19,6 @@ jobs:
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
       # Run *all* hooks, but only on the files in the PR/commit
-      - uses: pre-commit/action@v3.0.1 :contentReference[oaicite:1]{index=1}
+      - uses: pre-commit/action@v3.0.1
         with:
-          extra_args: --all-files        # ensure full tree is checked
+          extra_args: --all-files
