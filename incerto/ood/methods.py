@@ -1,25 +1,8 @@
 # incerto/ood/methods.py
-from abc import ABC, abstractmethod
-import torch, torch.nn.functional as F
+import torch
+import torch.nn.functional as F
 
-
-class OODDetector(ABC):
-    """
-    Base class: any detector only needs to implement `score`.
-    Higher scores  ⇒  more OOD-like.
-    """
-
-    def __init__(self, model):
-        self.model = model.eval()
-        for p in self.model.parameters():
-            p.requires_grad_(False)
-
-    @abstractmethod
-    def score(self, x: torch.Tensor) -> torch.Tensor: ...
-
-    @torch.no_grad()
-    def predict(self, x, threshold):
-        return self.score(x) > threshold  # Bool mask
+from .base import OODDetector
 
 
 class MSP(OODDetector):
@@ -93,6 +76,67 @@ class Mahalanobis(OODDetector):
             -1
         )  # N×C
         return d2.min(dim=-1).values
+
+    def _hook(self, name):
+        for n, m in self.model.named_modules():
+            if n.endswith(name):
+                handle = m.register_forward_hook(
+                    lambda _, __, out: setattr(self, "_tmp", out)
+                )
+                return lambda: self._tmp
+        raise ValueError(f"Layer {name} not found")
+
+
+class MaxLogit(OODDetector):
+    """
+    MaxLogit OOD detection (Hendrycks et al., 2019).
+
+    Uses the maximum logit value as the OOD score. Simpler than MSP
+    and often more effective as it doesn't require softmax normalization.
+    """
+
+    def score(self, x):
+        logits = self.model(x)
+        # Return negative max logit (higher logit = more ID-like)
+        return -logits.max(dim=-1).values
+
+
+class KNN(OODDetector):
+    """
+    KNN-based OOD detection (Sun et al., NeurIPS 2022).
+
+    Computes OOD score as distance to k-th nearest neighbor in feature space.
+    Requires fitting on training data.
+    """
+
+    def __init__(self, model, k=50, layer_name="penultimate"):
+        super().__init__(model)
+        self.k = k
+        self.layer = self._hook(layer_name)
+        self.train_features = None
+
+    def fit(self, loader):
+        """Store training features for KNN computation."""
+        features = []
+        for x, _ in loader:
+            self.model(x.to(next(self.model.parameters()).device))
+            features.append(self.layer.flatten(1).cpu())
+        self.train_features = torch.cat(features)
+
+    def score(self, x):
+        """Compute OOD score as distance to k-th nearest neighbor."""
+        if self.train_features is None:
+            raise RuntimeError("Must call .fit() before .score()")
+
+        self.model(x)
+        test_features = self.layer.flatten(1).cpu()
+
+        # Compute pairwise distances
+        dists = torch.cdist(test_features, self.train_features)
+
+        # Get k-th nearest neighbor distance
+        kth_dist, _ = torch.kthvalue(dists, self.k, dim=-1)
+        return kth_dist.to(x.device)
 
     def _hook(self, name):
         for n, m in self.model.named_modules():

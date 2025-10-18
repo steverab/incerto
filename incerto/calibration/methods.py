@@ -6,33 +6,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from torch.distributions import Categorical
 
-
-class BaseCalibrator:
-    """
-    Abstract base class for calibration methods.
-    """
-
-    def fit(self, logits: torch.Tensor, labels: torch.Tensor):  # noqa: ARG001
-        """
-        Fit the calibrator on a validation set.
-
-        Args:
-            logits: Tensor of shape (n_samples, n_classes).
-            labels: Tensor of shape (n_samples,) with integer class labels.
-        """
-        raise NotImplementedError
-
-    def predict(self, logits: torch.Tensor) -> Categorical:
-        """
-        Apply calibration to logits and return a Categorical distribution.
-
-        Args:
-            logits: Tensor of shape (n_samples, n_classes).
-
-        Returns:
-            A torch.distributions.Categorical over calibrated probabilities.
-        """
-        raise NotImplementedError
+from .base import BaseCalibrator
 
 
 class IdentityCalibrator(BaseCalibrator):
@@ -224,3 +198,114 @@ class PlattScalingCalibrator(BaseCalibrator):
         calibrated = torch.tensor(calibrated, device=logits.device, dtype=torch.float32)
         calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
         return Categorical(probs=calibrated)
+
+
+class VectorScaling(nn.Module, BaseCalibrator):
+    """
+    Vector Scaling (Guo et al., 2017).
+
+    Extends temperature scaling by learning a different temperature parameter
+    for each class: z_scaled = z / T where T is a vector.
+    """
+
+    def __init__(self, n_classes: int):
+        super().__init__()
+        self.temperature = nn.Parameter(torch.ones(n_classes))
+
+    def fit(
+        self,
+        logits: torch.Tensor,
+        labels: torch.Tensor,
+        lr: float = 0.01,
+        max_iters: int = 50,
+    ):
+        """
+        Fit vector of temperatures on validation logits and labels.
+
+        Args:
+            logits: Tensor (n_samples, n_classes).
+            labels: Tensor (n_samples,) with class indices.
+            lr: Learning rate for L-BFGS optimizer.
+            max_iters: Maximum iterations for optimizer.
+        """
+        device = logits.device
+        self.to(device)
+        labels = labels.to(device)
+
+        optimizer = torch.optim.LBFGS([self.temperature], lr=lr, max_iter=max_iters)
+        nll = nn.CrossEntropyLoss()
+
+        def _eval():
+            optimizer.zero_grad()
+            scaled = logits / self.temperature.clamp(min=1e-6)
+            loss = nll(scaled, labels)
+            loss.backward()
+            return loss
+
+        optimizer.step(_eval)
+        return self
+
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        return logits / self.temperature.clamp(min=1e-6)
+
+    def predict(self, logits: torch.Tensor) -> Categorical:
+        scaled = self.forward(logits)
+        probs = F.softmax(scaled, dim=1)
+        return Categorical(probs=probs)
+
+
+class MatrixScaling(nn.Module, BaseCalibrator):
+    """
+    Matrix Scaling (Guo et al., 2017).
+
+    Most general affine transformation: z_scaled = W @ z + b
+    where W is a learned matrix and b is a learned bias vector.
+    """
+
+    def __init__(self, n_classes: int):
+        super().__init__()
+        self.weight = nn.Parameter(torch.eye(n_classes))
+        self.bias = nn.Parameter(torch.zeros(n_classes))
+
+    def fit(
+        self,
+        logits: torch.Tensor,
+        labels: torch.Tensor,
+        lr: float = 0.01,
+        max_iters: int = 50,
+    ):
+        """
+        Fit transformation matrix and bias on validation logits.
+
+        Args:
+            logits: Tensor (n_samples, n_classes).
+            labels: Tensor (n_samples,) with class indices.
+            lr: Learning rate for L-BFGS optimizer.
+            max_iters: Maximum iterations for optimizer.
+        """
+        device = logits.device
+        self.to(device)
+        labels = labels.to(device)
+
+        optimizer = torch.optim.LBFGS(
+            [self.weight, self.bias], lr=lr, max_iter=max_iters
+        )
+        nll = nn.CrossEntropyLoss()
+
+        def _eval():
+            optimizer.zero_grad()
+            scaled = logits @ self.weight.T + self.bias
+            loss = nll(scaled, labels)
+            loss.backward()
+            return loss
+
+        optimizer.step(_eval)
+        return self
+
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        return logits @ self.weight.T + self.bias
+
+    def predict(self, logits: torch.Tensor) -> Categorical:
+        scaled = self.forward(logits)
+        probs = F.softmax(scaled, dim=1)
+        return Categorical(probs=probs)

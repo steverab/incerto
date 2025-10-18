@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .metrics import _get_bin_stats
+from .utils import get_bin_stats
 
 
 def plot_reliability_diagram(
@@ -21,7 +21,7 @@ def plot_reliability_diagram(
     predictions = np.argmax(probs, axis=1)
     accuracies = (predictions == labels.cpu().numpy()).astype(float)
 
-    bin_conf, bin_acc, weight = _get_bin_stats(confidences, accuracies, n_bins)
+    bin_conf, bin_acc, weight = get_bin_stats(confidences, accuracies, n_bins)
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -89,7 +89,7 @@ def plot_calibration_curve(
     predictions = np.argmax(probs, axis=1)
     accuracies = (predictions == labels.cpu().numpy()).astype(float)
 
-    bin_conf, bin_acc, _ = _get_bin_stats(confidences, accuracies, n_bins)
+    bin_conf, bin_acc, _ = get_bin_stats(confidences, accuracies, n_bins)
     centers = (np.arange(n_bins) + 0.5) / n_bins
 
     if ax is None:

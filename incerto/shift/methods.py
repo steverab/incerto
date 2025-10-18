@@ -10,37 +10,21 @@ Each detector exposes two methods:
 """
 
 from __future__ import annotations
-from typing import Iterable, Optional
+from typing import Optional
 
 import torch
 from torch.utils.data import DataLoader
 from scipy import stats
-from incerto.core.utils import pairwise_squared_euclidean  # hypothetical helper
+from incerto.core.utils import pairwise_squared_euclidean
 
-
-class _BaseShiftDetector:
-    """Shared machinery; child classes implement _compute()"""
-
-    def fit(self, reference_loader: DataLoader) -> "Self":
-        self._reference = torch.cat([x[0].detach() for x in reference_loader])
-        return self
-
-    @torch.no_grad()
-    def score(self, test_loader: DataLoader) -> float:
-        test_batch = torch.cat([x[0].detach() for x in test_loader])
-        return self._compute(test_batch)
-
-    # --------------------------------------------------------------------- #
-    # subclasses override this
-    # --------------------------------------------------------------------- #
-    def _compute(self, test: torch.Tensor) -> float:
-        raise NotImplementedError
+from .base import BaseShiftDetector
+from . import metrics
 
 
 # ------------------------------------------------------------------------- #
 #   Non-parametric two-sample tests
 # ------------------------------------------------------------------------- #
-class MMDShiftDetector(_BaseShiftDetector):
+class MMDShiftDetector(BaseShiftDetector):
     r"""Kernel Maximum Mean Discrepancy (unbiased, Gaussian kernel).
 
     * Gretton et al., 2012
@@ -60,7 +44,7 @@ class MMDShiftDetector(_BaseShiftDetector):
         return (k_xx + k_yy - 2 * k_xy).item()
 
 
-class EnergyShiftDetector(_BaseShiftDetector):
+class EnergyShiftDetector(BaseShiftDetector):
     """Energy distance – Szekely & Rizzo, 2013."""
 
     def _compute(self, test: torch.Tensor) -> float:
@@ -68,7 +52,7 @@ class EnergyShiftDetector(_BaseShiftDetector):
         return metrics.energy_distance(x, y)  # re-use metric
 
 
-class KSShiftDetector(_BaseShiftDetector):
+class KSShiftDetector(BaseShiftDetector):
     """One-dimensional Kolmogorov–Smirnov test (per feature, max statistic)."""
 
     def _compute(self, test: torch.Tensor) -> float:
@@ -81,7 +65,7 @@ class KSShiftDetector(_BaseShiftDetector):
 # ------------------------------------------------------------------------- #
 #   Black-box shift detectors (BBSD, classifier-based)
 # ------------------------------------------------------------------------- #
-class ClassifierShiftDetector(_BaseShiftDetector):
+class ClassifierShiftDetector(BaseShiftDetector):
     r"""Train a logistic regression to separate reference and test.
 
     * Lipton et al., 2018 (Black Box Shift Detection)

@@ -7,44 +7,13 @@ mask indicating which samples are *rejected* (i.e. deferred).
 """
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
 from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-class BaseSelectivePredictor(nn.Module, ABC):
-    """Abstract base class for any selective predictor."""
-
-    def forward(  # type: ignore[override]
-        self,
-        x: torch.Tensor,
-        *,
-        return_confidence: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
-        logits = self._forward_logits(x)
-        if return_confidence:
-            confidence = self.confidence_from_logits(logits)
-            return logits, confidence
-        return logits
-
-    @abstractmethod
-    def _forward_logits(self, x: torch.Tensor) -> torch.Tensor: ...
-
-    # ------------------------------------------------------------------
-    #                             UTILITIES
-    # ------------------------------------------------------------------
-    @staticmethod
-    def confidence_from_logits(logits: torch.Tensor) -> torch.Tensor:
-        """Default: max softmax probability (MSP)."""
-        return F.softmax(logits, dim=-1).max(dim=-1).values
-
-    @staticmethod
-    def reject(confidence: torch.Tensor, threshold: float) -> torch.Tensor:
-        """Return `True` for samples that should be rejected (deferred)."""
-        return confidence < threshold
+from .base import BaseSelectivePredictor
 
 
 # ----------------------------------------------------------------------
@@ -148,6 +117,110 @@ class SelectiveNet(BaseSelectivePredictor):
 
 
 # ----------------------------------------------------------------------
+#                         4. Self-Adaptive Training (SAT)
+# ----------------------------------------------------------------------
+class SelfAdaptiveTraining(BaseSelectivePredictor):
+    """
+    Self-Adaptive Training for better calibration and selective prediction.
+
+    Trains with adaptive soft labels that blend ground truth and model predictions:
+        y_adaptive = (1 - alpha) * y_hard + alpha * softmax(logits)
+
+    This improves calibration naturally during training, making the model better
+    at knowing when to reject/abstain on uncertain samples.
+
+    Reference:
+        Huang et al., "Self-Adaptive Training: beyond Empirical Risk Minimization"
+        NeurIPS 2020.
+    """
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        num_classes: int,
+        alpha_start: float = 0.0,
+        alpha_end: float = 0.9,
+        warmup_epochs: int = 5,
+    ):
+        """
+        Args:
+            backbone: The base model to train
+            num_classes: Number of classes
+            alpha_start: Initial alpha value (0 = pure hard labels)
+            alpha_end: Final alpha value (higher = more self-supervision)
+            warmup_epochs: Number of epochs before starting SAT
+        """
+        super().__init__()
+        self.backbone = backbone
+        self.num_classes = num_classes
+        self.alpha_start = alpha_start
+        self.alpha_end = alpha_end
+        self.warmup_epochs = warmup_epochs
+        self.current_epoch = 0
+
+    def _forward_logits(self, x: torch.Tensor) -> torch.Tensor:
+        return self.backbone(x)
+
+    def get_alpha(self, epoch: int, total_epochs: int) -> float:
+        """
+        Compute current alpha value based on training progress.
+
+        Args:
+            epoch: Current epoch number
+            total_epochs: Total number of training epochs
+
+        Returns:
+            Alpha value for blending hard and soft labels
+        """
+        if epoch < self.warmup_epochs:
+            return self.alpha_start
+
+        # Linear schedule from alpha_start to alpha_end
+        progress = (epoch - self.warmup_epochs) / max(
+            total_epochs - self.warmup_epochs, 1
+        )
+        alpha = self.alpha_start + (self.alpha_end - self.alpha_start) * progress
+        return min(alpha, self.alpha_end)
+
+    def sat_loss(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        alpha: float,
+    ) -> torch.Tensor:
+        """
+        Compute Self-Adaptive Training loss.
+
+        Args:
+            logits: Model predictions (batch_size, num_classes)
+            targets: Ground truth labels (batch_size,)
+            alpha: Mixing coefficient for soft labels
+
+        Returns:
+            SAT loss value
+        """
+        # Standard cross-entropy with hard labels
+        if alpha == 0.0:
+            return F.cross_entropy(logits, targets)
+
+        # Create one-hot encoding of hard labels
+        hard_labels = F.one_hot(targets, num_classes=self.num_classes).float()
+
+        # Get soft labels from current model predictions (detached to avoid gradient flow)
+        with torch.no_grad():
+            soft_labels = F.softmax(logits.detach(), dim=1)
+
+        # Blend hard and soft labels
+        adaptive_labels = (1 - alpha) * hard_labels + alpha * soft_labels
+
+        # Compute cross-entropy with adaptive labels
+        log_probs = F.log_softmax(logits, dim=1)
+        loss = -(adaptive_labels * log_probs).sum(dim=1).mean()
+
+        return loss
+
+
+# ----------------------------------------------------------------------
 #                         FACTORY UTIL
 # ----------------------------------------------------------------------
 def make(selector: str, *args, **kwargs) -> BaseSelectivePredictor:
@@ -159,4 +232,6 @@ def make(selector: str, *args, **kwargs) -> BaseSelectivePredictor:
         return SelectiveNet(*args, **kwargs)
     if selector in {"gambler", "deepgambler"}:
         return DeepGambler(*args, **kwargs)
+    if selector in {"sat", "selfadaptive", "self-adaptive"}:
+        return SelfAdaptiveTraining(*args, **kwargs)
     raise ValueError(f"Unknown selector {selector!r}")

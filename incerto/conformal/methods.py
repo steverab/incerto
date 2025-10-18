@@ -99,23 +99,32 @@ def aps(
     — Romano, Patterson, and Candes, *NeurIPS 2020*.
 
     Produces variable-sized sets by thresholding cumulative probability mass
-    up to a dynamic βγ calibrated on the held-out data.
+    up to and including the true label, calibrated on held-out data.
     """
     model.eval()
-    sizes = []
+    scores = []
     for x, y in calib_loader:
         logits = model(x)
-        conf_sorted, _ = torch.sort(torch.softmax(logits, dim=-1), descending=True)
-        cumprob = conf_sorted.cumsum(dim=-1)
-        sizes.append((cumprob <= 1.0).sum(dim=-1))
-    qhat = torch.quantile(torch.cat(sizes).float(), 1.0 - alpha)
+        probs = torch.softmax(logits, dim=-1)
+        probs_sorted, idx_sorted = torch.sort(probs, descending=True, dim=-1)
+        cumprobs = probs_sorted.cumsum(dim=-1)
+
+        # Find where true label appears in sorted order
+        ranks = (idx_sorted == y.unsqueeze(-1)).nonzero(as_tuple=True)[1]
+        # Score is cumulative probability up to and including true label
+        scores.append(cumprobs[torch.arange(len(y)), ranks])
+
+    qhat = torch.quantile(torch.cat(scores), 1.0 - alpha)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
         logits = model(x)
-        probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True)
-        cumprob = probs.cumsum(dim=-1)
-        k = (cumprob <= 1.0).sum(dim=-1).clip(max=int(qhat))
-        return [idx_i[: int(k_i)].clone().detach() for idx_i, k_i in zip(idx, k)]
+        probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True, dim=-1)
+        cumprobs = probs.cumsum(dim=-1)
+        # Include classes until cumulative probability exceeds threshold
+        return [
+            (idx_i[cumprobs_i <= qhat]).clone().detach()
+            for idx_i, cumprobs_i in zip(idx, cumprobs)
+        ]
 
     return predictor
 

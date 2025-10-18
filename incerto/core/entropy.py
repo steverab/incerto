@@ -1,3 +1,7 @@
+"""
+Entropy and information-theoretic measures.
+"""
+
 import numpy as np
 
 
