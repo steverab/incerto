@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "incerto"
 version = "0.0.1"
@@ -30,3 +34,14 @@ dev = [
     "twine>=6.1.0",
     "ty>=0.0.1a5",
 ]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["incerto*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+incerto = ["py.typed"]
