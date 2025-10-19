@@ -2,7 +2,7 @@ name: Deploy incerto landing page
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 permissions:
