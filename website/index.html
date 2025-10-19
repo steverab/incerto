@@ -1,3 +1,515 @@
-<h1>Incerto</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="incerto - A comprehensive Python library for uncertainty quantification in machine learning">
+    <meta name="keywords" content="uncertainty quantification, machine learning, calibration, OOD detection, conformal prediction, PyTorch">
+    <meta name="author" content="Stephan Rabanser">
 
-<p>More coming soon...</p>
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="incerto - Uncertainty Quantification for ML">
+    <meta property="og:description" content="State-of-the-art methods for calibration, OOD detection, conformal prediction, and more">
+    <meta property="og:url" content="https://incerto.dev">
+
+    <title>incerto - Uncertainty Quantification for ML</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="brand-icon">📊</span>
+                <span class="brand-name">incerto</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#installation">Installation</a>
+                <a href="#examples">Examples</a>
+                <a href="https://github.com/stephanrabanser/incerto" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-badge">v0.1.0</div>
+                <h1 class="hero-title">
+                    <span class="gradient-text">Uncertainty Quantification</span>
+                    <br>for Machine Learning
+                </h1>
+                <p class="hero-subtitle">
+                    A comprehensive Python library providing state-of-the-art methods for calibration,
+                    out-of-distribution detection, conformal prediction, and uncertainty estimation in deep learning.
+                </p>
+                <div class="hero-cta">
+                    <a href="#installation" class="btn btn-primary">Get Started</a>
+                    <a href="https://github.com/stephanrabanser/incerto" class="btn btn-secondary" target="_blank">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                        </svg>
+                        View on GitHub
+                    </a>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <div class="stat-value">5</div>
+                        <div class="stat-label">Core Modules</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">50+</div>
+                        <div class="stat-label">Methods</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">190</div>
+                        <div class="stat-label">Tests</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="hero-background"></div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Comprehensive Uncertainty Toolkit</h2>
+                <p>Everything you need for uncertainty quantification in modern ML systems</p>
+            </div>
+
+            <div class="features-grid">
+                <!-- Feature 1: Calibration -->
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Calibration</h3>
+                    <p>Ensure your model's confidence matches its accuracy</p>
+                    <ul class="feature-list">
+                        <li>Post-hoc methods: Temperature scaling, Platt scaling, Isotonic regression</li>
+                        <li>Training-time: Label smoothing, Focal loss, Evidential deep learning</li>
+                        <li>Metrics: ECE, MCE, Brier score, NLL</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 2: OOD Detection -->
+                <div class="feature-card">
+                    <div class="feature-icon">🎲</div>
+                    <h3>OOD Detection</h3>
+                    <p>Identify when your model encounters unfamiliar data</p>
+                    <ul class="feature-list">
+                        <li>Score-based: MSP, Energy, ODIN, MaxLogit</li>
+                        <li>Distance-based: Mahalanobis, KNN</li>
+                        <li>Training methods: Mixup, CutMix, Outlier Exposure</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 3: Conformal Prediction -->
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Conformal Prediction</h3>
+                    <p>Distribution-free uncertainty with coverage guarantees</p>
+                    <ul class="feature-list">
+                        <li>Classification: Inductive CP, APS, RAPS, Mondrian CP</li>
+                        <li>Regression: Jackknife+, CV+</li>
+                        <li>Guaranteed coverage on any data distribution</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 4: Selective Prediction -->
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <h3>Selective Prediction</h3>
+                    <p>Abstain from predictions when uncertain</p>
+                    <ul class="feature-list">
+                        <li>Confidence thresholding strategies</li>
+                        <li>Self-Adaptive Training (SAT)</li>
+                        <li>Risk-coverage tradeoff analysis</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 5: LLM Uncertainty -->
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>LLM Uncertainty</h3>
+                    <p>Quantify uncertainty in language model outputs</p>
+                    <ul class="feature-list">
+                        <li>Token-level: Entropy, perplexity, surprisal</li>
+                        <li>Sequence-level: Probability, average log-prob</li>
+                        <li>Sampling-based: Self-consistency, semantic entropy</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 6: Data & Utils -->
+                <div class="feature-card">
+                    <div class="feature-icon">📦</div>
+                    <h3>Data & Utilities</h3>
+                    <p>Built-in datasets and helper functions</p>
+                    <ul class="feature-list">
+                        <li>Datasets: MNIST, CIFAR-10/100, SVHN</li>
+                        <li>OOD benchmarks with standard splits</li>
+                        <li>Visualization and common architectures</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation Section -->
+    <section id="installation" class="installation">
+        <div class="container">
+            <div class="section-header">
+                <h2>Quick Installation</h2>
+                <p>Get started in seconds</p>
+            </div>
+
+            <div class="install-cards">
+                <div class="install-card">
+                    <h3>From PyPI</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre><code class="language-bash">pip install incerto</code></pre>
+                    </div>
+                    <p class="install-note">Coming soon to PyPI</p>
+                </div>
+
+                <div class="install-card">
+                    <h3>From Source</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <pre><code class="language-bash">git clone https://github.com/stephanrabanser/incerto.git
+cd incerto
+pip install -e .</code></pre>
+                    </div>
+                    <p class="install-note">Recommended for development</p>
+                </div>
+            </div>
+
+            <div class="requirements">
+                <h3>Requirements</h3>
+                <div class="req-badges">
+                    <span class="badge">Python 3.10+</span>
+                    <span class="badge">PyTorch 2.0+</span>
+                    <span class="badge">NumPy</span>
+                    <span class="badge">scikit-learn</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Examples Section -->
+    <section id="examples" class="examples">
+        <div class="container">
+            <div class="section-header">
+                <h2>See It In Action</h2>
+                <p>Simple, intuitive API for all uncertainty quantification tasks</p>
+            </div>
+
+            <div class="examples-tabs">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="showTab('calibration')">Calibration</button>
+                    <button class="tab-btn" onclick="showTab('ood')">OOD Detection</button>
+                    <button class="tab-btn" onclick="showTab('conformal')">Conformal Prediction</button>
+                    <button class="tab-btn" onclick="showTab('llm')">LLM Uncertainty</button>
+                </div>
+
+                <div class="tab-content">
+                    <!-- Calibration Example -->
+                    <div id="calibration" class="tab-panel active">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-python">import torch
+from incerto.calibration import TemperatureScaling, ece_score
+
+# Train your model
+model = YourModel()
+# ... training code ...
+
+# Post-hoc calibration on validation set
+calibrator = TemperatureScaling()
+calibrator.fit(val_logits, val_labels)
+
+# Get calibrated predictions
+test_logits = model(test_data)
+calibrated_probs = calibrator.predict(test_logits).probs
+
+# Evaluate calibration
+ece = ece_score(test_logits, test_labels)
+print(f"Expected Calibration Error: {ece:.4f}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- OOD Example -->
+                    <div id="ood" class="tab-panel">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-python">from incerto.ood import Energy
+from incerto.data import get_ood_benchmark
+
+# Load OOD benchmark
+id_loader, ood_loader = get_ood_benchmark(
+    "CIFAR10_vs_SVHN", batch_size=128
+)
+
+# Initialize Energy-based OOD detector
+detector = Energy(model)
+
+# Compute OOD scores
+id_scores = detector.score(id_data)
+ood_scores = detector.score(ood_data)
+
+# Evaluate detection performance
+from incerto.ood import auroc
+auc = auroc(id_scores, ood_scores)
+print(f"AUROC: {auc:.4f}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Conformal Example -->
+                    <div id="conformal" class="tab-panel">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-python">from incerto.conformal import inductive_conformal
+
+# Calibrate on validation set
+alpha = 0.1  # Desired coverage: 1 - alpha = 90%
+predictor = inductive_conformal(
+    model, calibration_loader, alpha
+)
+
+# Generate prediction sets with coverage guarantees
+x_test = torch.randn(100, 3, 32, 32)
+prediction_sets = predictor(x_test)
+
+# Each prediction set is guaranteed to contain
+# the true label with probability ≥ 90%
+for i, pred_set in enumerate(prediction_sets):
+    print(f"Sample {i}: Predicted classes {pred_set}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- LLM Example -->
+                    <div id="llm" class="tab-panel">
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <pre><code class="language-python">from incerto.llm import (
+    TokenEntropy,
+    SelfConsistency,
+    SemanticEntropy
+)
+
+# Token-level uncertainty
+logits = model(input_ids)  # shape: (batch, seq_len, vocab)
+token_entropy = TokenEntropy.compute(logits)
+
+# Sampling-based uncertainty
+responses = [
+    model.generate(prompt, do_sample=True)
+    for _ in range(10)
+]
+
+# Self-consistency
+sc_result = SelfConsistency.compute(responses)
+print(f"Agreement rate: {sc_result['agreement_rate']:.2f}")
+
+# Semantic entropy
+se_result = SemanticEntropy.compute(responses)
+print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why incerto Section -->
+    <section class="why-incerto">
+        <div class="container">
+            <div class="section-header">
+                <h2>Why incerto?</h2>
+            </div>
+
+            <div class="why-grid">
+                <div class="why-item">
+                    <div class="why-icon">🎯</div>
+                    <h3>Unified API</h3>
+                    <p>Consistent interface across all uncertainty quantification methods</p>
+                </div>
+
+                <div class="why-item">
+                    <div class="why-icon">⚡</div>
+                    <h3>PyTorch Native</h3>
+                    <p>Built on PyTorch for seamless integration with your models</p>
+                </div>
+
+                <div class="why-item">
+                    <div class="why-icon">📚</div>
+                    <h3>Research-Backed</h3>
+                    <p>Implementations based on peer-reviewed publications</p>
+                </div>
+
+                <div class="why-item">
+                    <div class="why-icon">✅</div>
+                    <h3>Well Tested</h3>
+                    <p>190 tests ensuring reliability and correctness</p>
+                </div>
+
+                <div class="why-item">
+                    <div class="why-icon">🚀</div>
+                    <h3>Easy to Use</h3>
+                    <p>Simple API that doesn't sacrifice functionality</p>
+                </div>
+
+                <div class="why-item">
+                    <div class="why-icon">📖</div>
+                    <h3>Open Source</h3>
+                    <p>MIT licensed, free for commercial and research use</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Ready to Get Started?</h2>
+                <p>Join the community making ML models more trustworthy</p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/stephanrabanser/incerto" class="btn btn-primary" target="_blank">
+                        View on GitHub
+                    </a>
+                    <a href="#installation" class="btn btn-secondary">
+                        Install Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <div class="brand">
+                        <span class="brand-icon">📊</span>
+                        <span class="brand-name">incerto</span>
+                    </div>
+                    <p class="footer-tagline">
+                        <em>Latin: uncertain, doubtful, unsure</em><br>
+                        Embracing uncertainty in ML predictions
+                    </p>
+                </div>
+
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <a href="https://github.com/stephanrabanser/incerto" target="_blank">GitHub</a>
+                        <a href="https://github.com/stephanrabanser/incerto/blob/master/README.md" target="_blank">Documentation</a>
+                        <a href="https://github.com/stephanrabanser/incerto/tree/master/examples" target="_blank">Examples</a>
+                        <a href="https://github.com/stephanrabanser/incerto/blob/master/CHANGELOG.md" target="_blank">Changelog</a>
+                    </div>
+
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/stephanrabanser/incerto/issues" target="_blank">Issues</a>
+                        <a href="https://github.com/stephanrabanser/incerto/discussions" target="_blank">Discussions</a>
+                        <a href="https://github.com/stephanrabanser/incerto/blob/master/CONTRIBUTING.md" target="_blank">Contributing</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2025 incerto. Released under the MIT License.</p>
+                <p>Created by <a href="https://github.com/stephanrabanser" target="_blank">Stephan Rabanser</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // Initialize syntax highlighting
+        hljs.highlightAll();
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all panels
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+
+            // Deactivate all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected panel
+            document.getElementById(tabName).classList.add('active');
+
+            // Activate clicked button
+            event.target.classList.add('active');
+
+            // Re-highlight code
+            hljs.highlightAll();
+        }
+
+        // Copy code functionality
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            const code = codeBlock.textContent;
+
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = 'Copy';
+                }, 2000);
+            });
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Navbar scroll effect
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const navbar = document.querySelector('.navbar');
+            const currentScroll = window.pageYOffset;
+
+            if (currentScroll > 100) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
+            }
+
+            lastScroll = currentScroll;
+        });
+    </script>
+</body>
+</html>
