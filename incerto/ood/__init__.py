@@ -1,11 +1,16 @@
 """
 Out-of-distribution detection methods, metrics, and visualizations.
+
+This module provides:
+- Post-hoc OOD detection methods (methods.py): Applied after training
+- Training-time OOD methods (training.py): Integrated into training
+- OOD detection metrics and visualizations
 """
 
 # Base classes
 from .base import OODDetector
 
-# OOD detection methods
+# Post-hoc OOD detection methods
 from .methods import (
     MSP,
     Energy,
@@ -13,6 +18,15 @@ from .methods import (
     Mahalanobis,
     MaxLogit,
     KNN,
+)
+
+# Training-time OOD methods
+from .training import (
+    mixup_data,
+    mixup_criterion,
+    OutlierExposureLoss,
+    EnergyRegularizedLoss,
+    CutMix,
 )
 
 # Metrics
@@ -38,13 +52,19 @@ from .utils import (
 __all__ = [
     # Base
     "OODDetector",
-    # Methods
+    # Post-hoc methods
     "MSP",
     "Energy",
     "ODIN",
     "Mahalanobis",
     "MaxLogit",
     "KNN",
+    # Training-time methods
+    "mixup_data",
+    "mixup_criterion",
+    "OutlierExposureLoss",
+    "EnergyRegularizedLoss",
+    "CutMix",
     # Metrics
     "auroc",
     "fpr_at_tpr",

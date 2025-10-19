@@ -55,7 +55,7 @@ class Mahalanobis(OODDetector):
         acts, labels = [], []
         for x, y in loader:
             self.model(x.to(next(self.model.parameters()).device))
-            acts.append(self.layer.flatten(1).cpu())
+            acts.append(self.layer().flatten(1).cpu())
             labels.append(y.cpu())
         acts = torch.cat(acts)
         labels = torch.cat(labels)
@@ -67,7 +67,7 @@ class Mahalanobis(OODDetector):
 
     def score(self, x):
         self.model(x)
-        f = self.layer.flatten(1)
+        f = self.layer().flatten(1)
         d2 = (
             (f[:, None] - self.class_means)  # N×C×D
             @ self.precision
@@ -120,7 +120,7 @@ class KNN(OODDetector):
         features = []
         for x, _ in loader:
             self.model(x.to(next(self.model.parameters()).device))
-            features.append(self.layer.flatten(1).cpu())
+            features.append(self.layer().flatten(1).cpu())
         self.train_features = torch.cat(features)
 
     def score(self, x):
@@ -129,7 +129,7 @@ class KNN(OODDetector):
             raise RuntimeError("Must call .fit() before .score()")
 
         self.model(x)
-        test_features = self.layer.flatten(1).cpu()
+        test_features = self.layer().flatten(1).cpu()
 
         # Compute pairwise distances
         dists = torch.cdist(test_features, self.train_features)

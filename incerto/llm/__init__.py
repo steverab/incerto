@@ -8,6 +8,7 @@ Submodules:
     token: Token-level uncertainty measures
     sequence: Sequence-level uncertainty aggregation
     sampling: Sampling-based uncertainty (multiple generations)
+    generation: Generation-specific methods (beam search, nucleus sampling)
     verbalized: Prompting-based uncertainty elicitation
     calibration: Calibration methods for LLM outputs
     metrics: Evaluation metrics
@@ -42,6 +43,14 @@ from .sampling import (
     MutualInformation,
     SemanticEntropy,
     EnsembleDisagreement,
+)
+
+# Generation-specific uncertainty
+from .generation import (
+    BeamSearchUncertainty,
+    NucleusSamplingUncertainty,
+    IDontKnowDetection,
+    ContrastiveDecoding,
 )
 
 # Verbalized uncertainty
@@ -105,6 +114,11 @@ __all__ = [
     "MutualInformation",
     "SemanticEntropy",
     "EnsembleDisagreement",
+    # Generation-specific
+    "BeamSearchUncertainty",
+    "NucleusSamplingUncertainty",
+    "IDontKnowDetection",
+    "ContrastiveDecoding",
     # Verbalized
     "VerbalizedConfidence",
     "PTrue",

@@ -1,0 +1,315 @@
+"""
+Tests for calibration metrics.
+
+All metrics expect logits (not probabilities) and return Python floats (not tensors).
+"""
+
+import pytest
+import torch
+import numpy as np
+
+from incerto.calibration.metrics import (
+    nll,
+    brier_score,
+    ece_score,
+    mce_score,
+    classwise_ece,
+)
+
+
+class TestNLL:
+    """Test negative log-likelihood metric."""
+
+    def test_perfect_predictions(self, num_classes):
+        """Test NLL for perfect predictions."""
+        n = 100
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Set correct class to very high logit
+        logits[torch.arange(n), labels] = 100.0
+
+        nll_value = nll(logits, labels)
+
+        assert isinstance(nll_value, float)
+        assert nll_value < 0.01  # Very low NLL for perfect predictions
+
+    def test_uniform_predictions(self, num_classes):
+        """Test NLL for uniform predictions."""
+        n = 100
+        logits = torch.zeros(n, num_classes)  # Uniform after softmax
+        labels = torch.randint(0, num_classes, (n,))
+
+        nll_value = nll(logits, labels)
+
+        # Uniform predictions should have NLL ≈ log(K)
+        expected = np.log(num_classes)
+        assert isinstance(nll_value, float)
+        assert abs(nll_value - expected) < 0.1
+
+    def test_random_predictions(self, multiclass_logits, multiclass_labels):
+        """Test NLL for random predictions."""
+        nll_value = nll(multiclass_logits, multiclass_labels)
+
+        assert isinstance(nll_value, float)
+        assert nll_value >= 0  # NLL should be non-negative
+        assert np.isfinite(nll_value)
+
+
+class TestBrierScore:
+    """Test Brier score metric."""
+
+    def test_perfect_predictions(self, num_classes):
+        """Test Brier score for perfect predictions."""
+        n = 100
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Set correct class to very high logit
+        logits[torch.arange(n), labels] = 100.0
+
+        bs = brier_score(logits, labels)
+
+        assert isinstance(bs, float)
+        assert bs < 0.01  # Very low Brier score for perfect predictions
+
+    def test_worst_predictions(self, num_classes):
+        """Test Brier score for worst predictions."""
+        n = 100
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Set wrong class to very high logit
+        wrong_labels = (labels + 1) % num_classes
+        logits[torch.arange(n), wrong_labels] = 100.0
+
+        bs = brier_score(logits, labels)
+
+        assert isinstance(bs, float)
+        assert bs > 1.5  # High Brier score for wrong predictions
+
+    def test_range(self, multiclass_logits, multiclass_labels):
+        """Test Brier score is in valid range [0, 2]."""
+        bs = brier_score(multiclass_logits, multiclass_labels)
+
+        assert isinstance(bs, float)
+        assert 0 <= bs <= 2
+
+    def test_random_predictions(self, multiclass_logits, multiclass_labels):
+        """Test Brier score for random predictions."""
+        bs = brier_score(multiclass_logits, multiclass_labels)
+
+        assert isinstance(bs, float)
+        assert np.isfinite(bs)
+
+
+class TestECE:
+    """Test Expected Calibration Error."""
+
+    def test_perfect_calibration(self):
+        """Test ECE for well-calibrated predictions."""
+        n = 1000
+        num_classes = 2
+
+        # Create calibrated predictions: confidence matches accuracy
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Adjust logits so that predictions are somewhat calibrated
+        # (This is approximate - perfect calibration is hard to construct)
+        logits[torch.arange(n), labels] = torch.randn(n) * 2
+
+        ece = ece_score(logits, labels, n_bins=10)
+
+        assert isinstance(ece, float)
+        assert 0 <= ece <= 1
+
+    def test_overconfident_predictions(self):
+        """Test ECE for overconfident predictions."""
+        n = 1000
+        num_classes = 2
+
+        # Always predict with high confidence, but only 50% accurate
+        logits = torch.zeros(n, num_classes)
+        logits[:, 0] = 10.0  # Always predict class 0 with high confidence
+        labels = torch.randint(0, num_classes, (n,))  # Random labels
+
+        ece = ece_score(logits, labels, n_bins=10)
+
+        assert isinstance(ece, float)
+        assert ece > 0.1  # Should have high ECE due to overconfidence
+
+    def test_different_bins(self, multiclass_logits, multiclass_labels):
+        """Test ECE with different number of bins."""
+        for n_bins in [5, 10, 15, 20]:
+            ece = ece_score(multiclass_logits, multiclass_labels, n_bins=n_bins)
+            assert isinstance(ece, float)
+            assert 0 <= ece <= 1
+            assert np.isfinite(ece)
+
+    def test_empty_bins(self, num_classes):
+        """Test ECE handles empty bins gracefully."""
+        # Small dataset with high confidence (all in one bin)
+        n = 10
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+        logits[torch.arange(n), labels] = 10.0  # All in high confidence bin
+
+        ece = ece_score(logits, labels, n_bins=100)  # Many bins
+
+        assert isinstance(ece, float)
+        assert np.isfinite(ece)
+        assert 0 <= ece <= 1
+
+
+class TestMCE:
+    """Test Maximum Calibration Error."""
+
+    def test_perfect_calibration(self):
+        """Test MCE for well-calibrated predictions."""
+        n = 1000
+        num_classes = 2
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+        logits[torch.arange(n), labels] = torch.randn(n) * 2
+
+        mce = mce_score(logits, labels, n_bins=10)
+
+        assert isinstance(mce, float)
+        assert 0 <= mce <= 1
+
+    def test_mce_greater_than_ece(self, multiclass_logits, multiclass_labels):
+        """Test MCE >= ECE (maximum >= average)."""
+        ece = ece_score(multiclass_logits, multiclass_labels, n_bins=10)
+        mce = mce_score(multiclass_logits, multiclass_labels, n_bins=10)
+
+        assert isinstance(ece, float)
+        assert isinstance(mce, float)
+        assert mce >= ece - 1e-5  # MCE should be >= ECE
+
+    def test_range(self, multiclass_logits, multiclass_labels):
+        """Test MCE is in valid range [0, 1]."""
+        mce = mce_score(multiclass_logits, multiclass_labels, n_bins=10)
+
+        assert isinstance(mce, float)
+        assert 0 <= mce <= 1
+
+
+class TestClasswiseECE:
+    """Test class-wise ECE."""
+
+    def test_returns_float(self, multiclass_logits, multiclass_labels):
+        """Test classwise ECE returns a single float (not array)."""
+        cwece = classwise_ece(multiclass_logits, multiclass_labels, n_bins=10)
+
+        # classwise_ece returns single float (mean over classes), not array!
+        assert isinstance(cwece, float)
+        assert np.isfinite(cwece)
+
+    def test_range(self, multiclass_logits, multiclass_labels):
+        """Test classwise ECE is in [0, 1]."""
+        cwece = classwise_ece(multiclass_logits, multiclass_labels, n_bins=10)
+
+        assert isinstance(cwece, float)
+        assert 0 <= cwece <= 1
+
+    def test_different_bins(self, multiclass_logits, multiclass_labels):
+        """Test classwise ECE with different bins."""
+        for n_bins in [5, 10, 15]:
+            cwece = classwise_ece(multiclass_logits, multiclass_labels, n_bins=n_bins)
+            assert isinstance(cwece, float)
+            assert 0 <= cwece <= 1
+
+
+# Integration tests
+class TestMetricsIntegration:
+    """Integration tests for calibration metrics."""
+
+    def test_all_metrics_work(self, multiclass_logits, multiclass_labels):
+        """Test all metrics can be computed."""
+        nll_val = nll(multiclass_logits, multiclass_labels)
+        bs_val = brier_score(multiclass_logits, multiclass_labels)
+        ece_val = ece_score(multiclass_logits, multiclass_labels)
+        mce_val = mce_score(multiclass_logits, multiclass_labels)
+        cwece_val = classwise_ece(multiclass_logits, multiclass_labels)
+
+        # All should be Python floats
+        assert isinstance(nll_val, float)
+        assert isinstance(bs_val, float)
+        assert isinstance(ece_val, float)
+        assert isinstance(mce_val, float)
+        assert isinstance(cwece_val, float)
+
+        # All should be finite
+        assert np.isfinite(nll_val)
+        assert np.isfinite(bs_val)
+        assert np.isfinite(ece_val)
+        assert np.isfinite(mce_val)
+        assert np.isfinite(cwece_val)
+
+
+# Edge case tests
+class TestEdgeCases:
+    """Test edge cases for calibration metrics."""
+
+    def test_single_sample(self, num_classes):
+        """Test metrics with single sample."""
+        logits = torch.randn(1, num_classes)
+        labels = torch.tensor([0])
+
+        # Should handle single sample
+        nll_val = nll(logits, labels)
+        bs_val = brier_score(logits, labels)
+
+        assert isinstance(nll_val, float)
+        assert isinstance(bs_val, float)
+        assert np.isfinite(nll_val)
+        assert np.isfinite(bs_val)
+
+    def test_binary_classification(self):
+        """Test metrics on binary classification."""
+        n = 100
+        logits = torch.randn(n, 2)
+        labels = torch.randint(0, 2, (n,))
+
+        # All metrics should work
+        nll_val = nll(logits, labels)
+        bs_val = brier_score(logits, labels)
+        ece_val = ece_score(logits, labels, n_bins=10)
+        mce_val = mce_score(logits, labels, n_bins=10)
+
+        assert np.isfinite(nll_val)
+        assert np.isfinite(bs_val)
+        assert np.isfinite(ece_val)
+        assert np.isfinite(mce_val)
+
+    def test_extreme_logits(self, num_classes):
+        """Test metrics with extreme logit values."""
+        n = 100
+        logits = torch.randn(n, num_classes) * 100  # Very large magnitude
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Should handle without overflow/underflow
+        nll_val = nll(logits, labels)
+        bs_val = brier_score(logits, labels)
+
+        assert np.isfinite(nll_val)
+        assert np.isfinite(bs_val)
+
+    def test_deterministic_predictions(self, num_classes):
+        """Test metrics with deterministic (very confident) predictions."""
+        n = 100
+        logits = torch.zeros(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+        preds = torch.randint(0, num_classes, (n,))
+
+        # Set predicted class to very high logit
+        logits[torch.arange(n), preds] = 100.0
+
+        nll_val = nll(logits, labels)
+        bs_val = brier_score(logits, labels)
+        ece_val = ece_score(logits, labels, n_bins=10)
+
+        assert np.isfinite(nll_val)
+        assert np.isfinite(bs_val)
+        assert np.isfinite(ece_val)

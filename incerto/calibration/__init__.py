@@ -1,11 +1,16 @@
 """
 Calibration methods, metrics, and visualizations.
+
+This module provides:
+- Post-hoc calibration methods (methods.py): Applied after training
+- Training-time calibration methods (training.py): Integrated into training
+- Calibration metrics and visualizations
 """
 
 # Base classes
 from .base import BaseCalibrator
 
-# Calibration methods
+# Post-hoc calibration methods
 from .methods import (
     IdentityCalibrator,
     TemperatureScaling,
@@ -14,6 +19,16 @@ from .methods import (
     PlattScalingCalibrator,
     VectorScaling,
     MatrixScaling,
+)
+
+# Training-time calibration methods
+from .training import (
+    LabelSmoothingLoss,
+    FocalLoss,
+    ConfidencePenalty,
+    evidential_loss,
+    get_uncertainty_from_evidence,
+    TemperatureAwareTraining,
 )
 
 # Metrics
@@ -42,7 +57,7 @@ from .utils import (
 __all__ = [
     # Base
     "BaseCalibrator",
-    # Methods
+    # Post-hoc methods
     "IdentityCalibrator",
     "TemperatureScaling",
     "IsotonicRegressionCalibrator",
@@ -50,6 +65,13 @@ __all__ = [
     "PlattScalingCalibrator",
     "VectorScaling",
     "MatrixScaling",
+    # Training-time methods
+    "LabelSmoothingLoss",
+    "FocalLoss",
+    "ConfidencePenalty",
+    "evidential_loss",
+    "get_uncertainty_from_evidence",
+    "TemperatureAwareTraining",
     # Metrics
     "nll",
     "brier_score",
