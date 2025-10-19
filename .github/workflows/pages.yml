@@ -1,0 +1,50 @@
+name: Deploy incerto landing page
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- Build the landing page only ---
+      - name: Prepare publish directory
+        run: |
+          mkdir -p public
+          rsync -av --delete website/ public/
+
+      # Optional but recommended for GitHub Pages
+      - name: Add .nojekyll and CNAME
+        run: |
+          touch public/.nojekyll
+          echo "incerto.dev" > public/CNAME
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
