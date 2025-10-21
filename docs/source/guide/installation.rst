@@ -29,7 +29,7 @@ For development or to get the latest features:
 
 .. code-block:: bash
 
-   git clone https://github.com/stephanrabanser/incerto.git
+   git clone https://github.com/steverab/incerto.git
    cd incerto
    pip install -e .
 
@@ -40,7 +40,7 @@ To install with development dependencies (for contributing):
 
 .. code-block:: bash
 
-   git clone https://github.com/stephanrabanser/incerto.git
+   git clone https://github.com/steverab/incerto.git
    cd incerto
    pip install -e ".[dev]"
 
@@ -48,7 +48,7 @@ Or if using uv:
 
 .. code-block:: bash
 
-   git clone https://github.com/stephanrabanser/incerto.git
+   git clone https://github.com/steverab/incerto.git
    cd incerto
    uv pip install -e .
 

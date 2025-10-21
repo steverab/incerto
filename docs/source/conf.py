@@ -103,7 +103,7 @@ html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
 
 html_theme_options = {
-    "repository_url": "https://github.com/stephanrabanser/incerto",
+    "repository_url": "https://github.com/steverab/incerto",
     "use_repository_button": True,
     "use_issues_button": True,
     "use_edit_page_button": True,

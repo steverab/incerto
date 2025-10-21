@@ -1,6 +1,6 @@
 # incerto
 
-[![Tests](https://github.com/stephanrabanser/incerto/actions/workflows/tests.yml/badge.svg)](https://github.com/stephanrabanser/incerto/actions/workflows/tests.yml)
+[![Tests](https://github.com/steverab/incerto/actions/workflows/tests.yml/badge.svg)](https://github.com/steverab/incerto/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -75,14 +75,14 @@ pip install incerto
 
 ### From source
 ```bash
-git clone https://github.com/stephanrabanser/incerto.git
+git clone https://github.com/steverab/incerto.git
 cd incerto
 pip install -e .
 ```
 
 ### With development dependencies
 ```bash
-git clone https://github.com/stephanrabanser/incerto.git
+git clone https://github.com/steverab/incerto.git
 cd incerto
 pip install -e ".[dev]"
 ```
@@ -304,7 +304,7 @@ If you use **incerto** in your research, please cite:
   author = {Rabanser, Stephan},
   title = {incerto: Uncertainty Quantification for Machine Learning},
   year = {2025},
-  url = {https://github.com/stephanrabanser/incerto},
+  url = {https://github.com/steverab/incerto},
   version = {0.1.0}
 }
 ```
@@ -323,8 +323,8 @@ This library implements methods from many research papers. Key references:
 
 - **Documentation**: (coming soon)
 - **Paper**: (coming soon)
-- **Issues**: [GitHub Issues](https://github.com/stephanrabanser/incerto/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/stephanrabanser/incerto/discussions)
+- **Issues**: [GitHub Issues](https://github.com/steverab/incerto/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/steverab/incerto/discussions)
 
 ---
 

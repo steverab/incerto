@@ -9,8 +9,8 @@ incerto: Uncertainty Quantification for Machine Learning
    :target: https://opensource.org/licenses/MIT
    :alt: License: MIT
 
-.. image:: https://github.com/stephanrabanser/incerto/actions/workflows/tests.yml/badge.svg
-   :target: https://github.com/stephanrabanser/incerto/actions/workflows/tests.yml
+.. image:: https://github.com/steverab/incerto/actions/workflows/tests.yml/badge.svg
+   :target: https://github.com/steverab/incerto/actions/workflows/tests.yml
    :alt: Tests
 
 **incerto** is a comprehensive Python library for **uncertainty quantification in machine learning**.
@@ -33,7 +33,7 @@ From source:
 
 .. code-block:: bash
 
-   git clone https://github.com/stephanrabanser/incerto.git
+   git clone https://github.com/steverab/incerto.git
    cd incerto
    pip install -e .
 
