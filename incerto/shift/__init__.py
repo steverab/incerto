@@ -11,6 +11,9 @@ from .methods import (
     EnergyShiftDetector,
     KSShiftDetector,
     ClassifierShiftDetector,
+    BBSDDetector,
+    LabelShiftDetector,
+    ImportanceWeightingShift,
 )
 
 # Metrics
@@ -18,6 +21,8 @@ from .metrics import (
     energy_distance,
     total_variation,
     population_stability_index,
+    wasserstein_distance,
+    sliced_wasserstein_distance,
 )
 
 # Visualization
@@ -34,10 +39,15 @@ __all__ = [
     "EnergyShiftDetector",
     "KSShiftDetector",
     "ClassifierShiftDetector",
+    "BBSDDetector",
+    "LabelShiftDetector",
+    "ImportanceWeightingShift",
     # Metrics
     "energy_distance",
     "total_variation",
     "population_stability_index",
+    "wasserstein_distance",
+    "sliced_wasserstein_distance",
     # Visual
     "plot_feature_histograms",
     "plot_embedding_space",

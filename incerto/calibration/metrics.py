@@ -70,3 +70,66 @@ def classwise_ece(
         eces.append(np.sum(weight * np.abs(bin_acc - bin_conf)))
 
     return float(np.mean(eces)) if eces else 0.0
+
+
+def adaptive_ece_score(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    n_bins: int = 10,
+    norm: str = "l1",
+) -> float:
+    """
+    Adaptive Expected Calibration Error (Nixon et al., 2019).
+
+    Uses equal-mass binning instead of equal-width binning, making it
+    more robust to varying confidence distributions.
+
+    Reference:
+        Nixon et al., "Measuring Calibration in Deep Learning" (CVPR Workshops 2019)
+
+    Args:
+        logits: Model logits (N, C)
+        labels: True labels (N,)
+        n_bins: Number of bins
+        norm: Norm to use ('l1' or 'l2')
+
+    Returns:
+        Adaptive ECE score
+    """
+    probs = F.softmax(logits, dim=1).detach().cpu().numpy()
+    confidences = np.max(probs, axis=1)
+    predictions = np.argmax(probs, axis=1)
+    accuracies = (predictions == labels.detach().cpu().numpy()).astype(float)
+
+    # Sort by confidence
+    sorted_indices = np.argsort(confidences)
+    confidences_sorted = confidences[sorted_indices]
+    accuracies_sorted = accuracies[sorted_indices]
+
+    # Create adaptive bins (equal mass)
+    n = len(confidences)
+    bin_size = n // n_bins
+
+    ece = 0.0
+    for i in range(n_bins):
+        start_idx = i * bin_size
+        end_idx = (i + 1) * bin_size if i < n_bins - 1 else n
+
+        if start_idx >= end_idx:
+            continue
+
+        bin_conf = confidences_sorted[start_idx:end_idx].mean()
+        bin_acc = accuracies_sorted[start_idx:end_idx].mean()
+        weight = (end_idx - start_idx) / n
+
+        if norm == "l1":
+            ece += weight * abs(bin_acc - bin_conf)
+        elif norm == "l2":
+            ece += weight * (bin_acc - bin_conf) ** 2
+        else:
+            raise ValueError(f"Unknown norm: {norm}")
+
+    if norm == "l2":
+        ece = np.sqrt(ece)
+
+    return float(ece)

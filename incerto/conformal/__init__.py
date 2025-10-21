@@ -10,6 +10,7 @@ from .methods import (
     raps,
     jackknife_plus,
     cv_plus,
+    conformalized_quantile_regression,
 )
 
 # Metrics
@@ -40,6 +41,7 @@ __all__ = [
     "raps",
     "jackknife_plus",
     "cv_plus",
+    "conformalized_quantile_regression",
     # Metrics
     "empirical_coverage",
     "average_set_size",

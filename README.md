@@ -40,6 +40,26 @@ Latin *incerto* = "uncertain, doubtful, unsure" - embracing uncertainty in ML pr
 - **Sampling-based**: Self-consistency, semantic entropy, predictive entropy
 - **Generation methods**: Beam search uncertainty, nucleus sampling, contrastive decoding
 
+### 🎲 **Bayesian Deep Learning** ⭐ NEW
+- **MC Dropout**: Uncertainty via dropout at test time
+- **Deep Ensembles**: Train multiple models for robust predictions
+- **SWAG**: Stochastic Weight Averaging - Gaussian
+- **Laplace Approximation**: Gaussian posterior around MAP estimate
+- **Variational Inference**: Bayes by Backprop
+- **Uncertainty decomposition**: Separate epistemic & aleatoric uncertainty
+
+### 🎯 **Active Learning** ⭐ NEW
+- **Acquisition functions**: Entropy, BALD, margin, variance ratio
+- **Query strategies**: Uncertainty sampling, diversity sampling, Core-Set, BADGE
+- **Batch selection**: BatchBALD for efficient batch queries
+- **Committee methods**: Query by Committee (QBC)
+
+### 📈 **Distribution Shift Detection**
+- **Statistical tests**: MMD, Energy distance, Kolmogorov-Smirnov
+- **Classifier-based**: Black-Box Shift Detection (BBSD)
+- **Label shift**: Detect and correct label distribution changes ⭐ NEW
+- **Importance weighting**: Covariate shift adaptation ⭐ NEW
+
 ### 📦 **Data & Utilities**
 - Built-in datasets (MNIST, CIFAR-10/100, SVHN)
 - OOD benchmark datasets

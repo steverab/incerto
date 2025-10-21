@@ -71,7 +71,7 @@ class ClassifierShiftDetector(BaseShiftDetector):
     * Lipton et al., 2018 (Black Box Shift Detection)
     """
 
-    def __init__(self, clf_factory, device: Optional[str] = None) -> None:
+    def __init__(self, clf_factory=None, device: Optional[str] = None) -> None:
         from sklearn.linear_model import LogisticRegression
 
         self.clf = clf_factory() if clf_factory else LogisticRegression(max_iter=1000)
@@ -88,3 +88,327 @@ class ClassifierShiftDetector(BaseShiftDetector):
         proba = self.clf.predict_proba(X_test)[:, 1]
         # Mean output probability should be ~0.5 under no shift
         return abs(proba.mean() - 0.5) * 2
+
+
+# Alias for BBSD
+BBSDDetector = ClassifierShiftDetector
+
+
+class LabelShiftDetector:
+    """
+    Black-Box Shift Detection for label shift.
+
+    Detects and quantifies label shift (prior probability shift) using
+    confusion matrix estimation.
+
+    Reference:
+        Lipton et al., "Detecting and Correcting for Label Shift with Black Box Predictors" (ICML 2018)
+
+    Args:
+        num_classes: Number of classes
+        calibrated: Whether predictions are calibrated
+    """
+
+    def __init__(self, num_classes: int, calibrated: bool = False):
+        self.num_classes = num_classes
+        self.calibrated = calibrated
+        self.source_label_dist = None
+        self.confusion_matrix = None
+
+    def fit(
+        self,
+        model: torch.nn.Module,
+        source_loader: DataLoader,
+        validation_loader: DataLoader,
+    ):
+        """
+        Fit label shift detector.
+
+        Args:
+            model: Trained classifier
+            source_loader: Source domain data with labels
+            validation_loader: Validation set from source domain
+        """
+        import numpy as np
+
+        model.eval()
+
+        # Estimate source label distribution
+        all_labels = []
+        for _, y in source_loader:
+            all_labels.append(y)
+        all_labels = torch.cat(all_labels)
+
+        label_counts = torch.bincount(all_labels, minlength=self.num_classes)
+        self.source_label_dist = label_counts.float() / label_counts.sum()
+
+        # Estimate confusion matrix on validation set
+        confusion = torch.zeros(self.num_classes, self.num_classes)
+
+        with torch.no_grad():
+            for x, y in validation_loader:
+                outputs = model(x)
+                preds = outputs.argmax(dim=-1)
+
+                for true_label in range(self.num_classes):
+                    mask = y == true_label
+                    if mask.sum() > 0:
+                        pred_counts = torch.bincount(
+                            preds[mask], minlength=self.num_classes
+                        )
+                        confusion[true_label] += pred_counts.float()
+
+        # Normalize rows (C[i,j] = P(pred=j | true=i))
+        row_sums = confusion.sum(dim=1, keepdim=True)
+        row_sums[row_sums == 0] = 1  # Avoid division by zero
+        self.confusion_matrix = confusion / row_sums
+
+    def estimate_target_distribution(
+        self,
+        model: torch.nn.Module,
+        target_loader: DataLoader,
+    ) -> torch.Tensor:
+        """
+        Estimate target label distribution.
+
+        Args:
+            model: Trained classifier
+            target_loader: Target domain data (no labels needed)
+
+        Returns:
+            Estimated target label distribution
+        """
+        if self.confusion_matrix is None:
+            raise RuntimeError("Must call fit() first")
+
+        model.eval()
+
+        # Get predictions on target data
+        all_preds = []
+        with torch.no_grad():
+            for x, _ in target_loader:
+                outputs = model(x)
+                preds = outputs.argmax(dim=-1)
+                all_preds.append(preds)
+
+        all_preds = torch.cat(all_preds)
+
+        # Compute empirical prediction distribution
+        pred_counts = torch.bincount(all_preds, minlength=self.num_classes)
+        pred_dist = pred_counts.float() / pred_counts.sum()
+
+        # Solve: pred_dist = C^T @ target_dist
+        # target_dist = (C^T)^{-1} @ pred_dist
+        try:
+            target_dist = torch.linalg.solve(self.confusion_matrix.T, pred_dist)
+
+            # Project to simplex (ensure non-negative and sum to 1)
+            target_dist = torch.clamp(target_dist, min=0)
+            target_dist = target_dist / target_dist.sum()
+
+        except:
+            # Fallback to least squares if matrix is singular
+            target_dist = torch.linalg.lstsq(
+                self.confusion_matrix.T, pred_dist
+            ).solution
+            target_dist = torch.clamp(target_dist, min=0)
+            target_dist = target_dist / target_dist.sum()
+
+        return target_dist
+
+    def compute_shift_magnitude(
+        self,
+        model: torch.nn.Module,
+        target_loader: DataLoader,
+        metric: str = "tvd",
+    ) -> float:
+        """
+        Compute magnitude of label shift.
+
+        Args:
+            model: Trained classifier
+            target_loader: Target domain data
+            metric: Metric to use ('tvd', 'kl', 'l2')
+
+        Returns:
+            Shift magnitude
+        """
+        target_dist = self.estimate_target_distribution(model, target_loader)
+
+        if metric == "tvd":
+            # Total variation distance
+            return 0.5 * torch.abs(target_dist - self.source_label_dist).sum().item()
+        elif metric == "kl":
+            # KL divergence
+            return (
+                (
+                    target_dist
+                    * torch.log(
+                        (target_dist + 1e-10) / (self.source_label_dist + 1e-10)
+                    )
+                )
+                .sum()
+                .item()
+            )
+        elif metric == "l2":
+            # L2 distance
+            return torch.norm(target_dist - self.source_label_dist, p=2).item()
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
+
+
+class ImportanceWeightingShift:
+    """
+    Importance weighting for covariate shift adaptation.
+
+    Estimates density ratio w(x) = p_target(x) / p_source(x) and
+    uses it to re-weight training samples.
+
+    Reference:
+        Sugiyama et al., "Direct Importance Estimation with Model Selection" (NIPS 2007)
+
+    Args:
+        method: Estimation method ('kernel', 'logistic', 'kliep')
+        alpha: Regularization parameter
+    """
+
+    def __init__(self, method: str = "logistic", alpha: float = 0.01):
+        self.method = method
+        self.alpha = alpha
+        self.weights_model = None
+
+    def fit(
+        self,
+        source_features: torch.Tensor,
+        target_features: torch.Tensor,
+    ):
+        """
+        Estimate importance weights.
+
+        Args:
+            source_features: Features from source domain (N_s, D)
+            target_features: Features from target domain (N_t, D)
+        """
+        import numpy as np
+
+        if self.method == "logistic":
+            # Train logistic regression to discriminate source vs target
+            from sklearn.linear_model import LogisticRegression
+
+            X_source = source_features.cpu().numpy()
+            X_target = target_features.cpu().numpy()
+
+            X = np.concatenate([X_source, X_target], axis=0)
+            y = np.concatenate([np.zeros(len(X_source)), np.ones(len(X_target))])
+
+            clf = LogisticRegression(C=1.0 / self.alpha, max_iter=1000)
+            clf.fit(X, y)
+
+            self.weights_model = clf
+
+        elif self.method == "kernel":
+            # Kernel mean matching (KMM)
+            self._fit_kernel_weights(source_features, target_features)
+
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+    def _fit_kernel_weights(
+        self,
+        source_features: torch.Tensor,
+        target_features: torch.Tensor,
+    ):
+        """Fit kernel-based importance weights."""
+        # Simplified KMM implementation
+        from sklearn.metrics.pairwise import rbf_kernel
+
+        X_s = source_features.cpu().numpy()
+        X_t = target_features.cpu().numpy()
+
+        n_s = len(X_s)
+        n_t = len(X_t)
+
+        # Compute kernel matrices
+        K = rbf_kernel(X_s, X_s)
+        kappa = rbf_kernel(X_s, X_t).mean(axis=1)
+
+        # Solve QP problem (simplified)
+        # min 0.5 * w^T K w - kappa^T w
+        # s.t. w >= 0, mean(w) = 1
+
+        import numpy as np
+        from scipy.optimize import minimize
+
+        def objective(w):
+            return 0.5 * w @ K @ w - kappa @ w + self.alpha * (w**2).sum()
+
+        def constraint(w):
+            return w.mean() - 1
+
+        constraints = {"type": "eq", "fun": constraint}
+        bounds = [(0, None) for _ in range(n_s)]
+
+        result = minimize(
+            objective,
+            np.ones(n_s) / n_s,
+            bounds=bounds,
+            constraints=constraints,
+            method="SLSQP",
+        )
+
+        self.weights_model = torch.tensor(result.x, dtype=torch.float32)
+
+    def compute_weights(
+        self,
+        source_features: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute importance weights for source samples.
+
+        Args:
+            source_features: Source domain features
+
+        Returns:
+            Importance weights
+        """
+        if self.weights_model is None:
+            raise RuntimeError("Must call fit() first")
+
+        if self.method == "logistic":
+            # w(x) = P(target|x) / P(source|x)
+            #      = p(x|target) / p(x|source)
+            #      ~ P(target|x) / (1 - P(target|x))
+
+            X = source_features.cpu().numpy()
+            probs = self.weights_model.predict_proba(X)[:, 1]  # P(target|x)
+
+            weights = probs / (1 - probs + 1e-10)
+            weights = torch.tensor(weights, dtype=torch.float32)
+
+            # Normalize weights to sum to n
+            weights = weights / weights.mean()
+
+            return weights
+
+        elif self.method == "kernel":
+            return self.weights_model
+
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+    def weighted_loss(
+        self,
+        loss: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Apply importance weights to loss.
+
+        Args:
+            loss: Per-sample losses
+            weights: Importance weights
+
+        Returns:
+            Weighted average loss
+        """
+        return (loss * weights).mean()

@@ -19,6 +19,8 @@ from .methods import (
     PlattScalingCalibrator,
     VectorScaling,
     MatrixScaling,
+    DirichletCalibrator,
+    BetaCalibrator,
 )
 
 # Training-time calibration methods
@@ -38,6 +40,7 @@ from .metrics import (
     ece_score,
     mce_score,
     classwise_ece,
+    adaptive_ece_score,
 )
 
 # Visualization
@@ -65,6 +68,8 @@ __all__ = [
     "PlattScalingCalibrator",
     "VectorScaling",
     "MatrixScaling",
+    "DirichletCalibrator",
+    "BetaCalibrator",
     # Training-time methods
     "LabelSmoothingLoss",
     "FocalLoss",
@@ -78,6 +83,7 @@ __all__ = [
     "ece_score",
     "mce_score",
     "classwise_ece",
+    "adaptive_ece_score",
     # Visual
     "plot_reliability_diagram",
     "plot_confidence_histogram",

@@ -1,4 +1,4 @@
-name: Deploy incerto landing page
+name: Deploy Website and Documentation
 
 on:
   push:
@@ -21,13 +21,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # --- Build the landing page only ---
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system sphinx sphinx-book-theme sphinx-autodoc-typehints sphinx-copybutton myst-parser
+          uv pip install --system -e .
+
+      - name: Build Sphinx Documentation
+        run: |
+          cd docs
+          sphinx-build -b html source build/html
+
       - name: Prepare publish directory
         run: |
           mkdir -p public
+          # Copy landing page
           rsync -av --delete website/ public/
+          # Copy Sphinx docs to public/docs/
+          mkdir -p public/docs
+          rsync -av --delete docs/build/html/ public/docs/
 
-      # Optional but recommended for GitHub Pages
       - name: Add .nojekyll and CNAME
         run: |
           touch public/.nojekyll

@@ -249,3 +249,110 @@ def cv_plus(
         return mu + q_lo, mu + q_hi
 
     return predictor
+
+
+@torch.no_grad()
+def conformalized_quantile_regression(
+    quantile_model: torch.nn.Module,
+    calib_loader: torch.utils.data.DataLoader,
+    alpha: float,
+    q_low: float | None = None,
+    q_high: float | None = None,
+) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+    """
+    Conformalized Quantile Regression (CQR)
+    — Romano, Patterson, and Candes, *NeurIPS 2019*.
+
+    Combines quantile regression with split conformal prediction to produce
+    adaptive prediction intervals with finite-sample coverage guarantees.
+
+    The method works by:
+    1. Training a quantile regression model to predict lower and upper quantiles
+    2. Computing conformity scores on a calibration set as the maximum violation
+    3. Using these scores to adjust the quantile predictions
+
+    Args:
+        quantile_model: A model that outputs (lower_quantile, upper_quantile) predictions.
+                       Expected to output shape (batch_size, 2) where:
+                       - [:, 0] is the lower quantile prediction
+                       - [:, 1] is the upper quantile prediction
+        calib_loader: DataLoader for calibration data
+        alpha: Miscoverage rate (e.g., 0.1 for 90% coverage)
+        q_low: Lower quantile level (default: alpha/2)
+        q_high: Upper quantile level (default: 1 - alpha/2)
+
+    Returns:
+        predictor: Function mapping inputs to (lower, upper) prediction intervals
+
+    Reference:
+        Romano, Patterson, and Candes. "Conformalized Quantile Regression."
+        NeurIPS 2019. https://arxiv.org/abs/1905.03222
+
+    Example:
+        >>> # Train quantile model (outputs lower and upper quantiles)
+        >>> quantile_net = QuantileRegressionNet()
+        >>> # ... train quantile_net ...
+        >>> predictor = conformalized_quantile_regression(
+        ...     quantile_net, calib_loader, alpha=0.1
+        ... )
+        >>> lower, upper = predictor(test_x)
+    """
+    if q_low is None:
+        q_low = alpha / 2
+    if q_high is None:
+        q_high = 1 - alpha / 2
+
+    quantile_model.eval()
+    scores = []
+
+    for x, y in calib_loader:
+        # Get quantile predictions (batch_size, 2)
+        preds = quantile_model(x)
+
+        if preds.dim() == 1:
+            # If model outputs single value, assume it's the median
+            # and we'll use symmetric intervals
+            preds = preds.unsqueeze(-1).repeat(1, 2)
+
+        q_lo = preds[:, 0]  # lower quantile prediction
+        q_hi = preds[:, 1]  # upper quantile prediction
+
+        # Conformity score: max of how much y exceeds the interval
+        # score = max(q_lo - y, y - q_hi)
+        score_low = q_lo - y
+        score_high = y - q_hi
+        score = torch.max(score_low, score_high)
+        scores.append(score)
+
+    # Compute calibrated quantile with finite-sample correction
+    all_scores = torch.cat(scores)
+    n_calib = len(all_scores)
+    q_level = np.ceil((n_calib + 1) * (1 - alpha)) / n_calib
+    q_level = min(q_level, 1.0)  # ensure valid quantile
+
+    qhat = torch.quantile(all_scores, q_level)
+
+    def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Predict conformalized intervals for new inputs.
+
+        Args:
+            x: Input tensor of shape (batch_size, ...)
+
+        Returns:
+            lower: Lower bound of prediction interval (batch_size,)
+            upper: Upper bound of prediction interval (batch_size,)
+        """
+        quantile_model.eval()
+        preds = quantile_model(x)
+
+        if preds.dim() == 1:
+            preds = preds.unsqueeze(-1).repeat(1, 2)
+
+        # Adjust quantile predictions by calibrated correction
+        lower = preds[:, 0] - qhat
+        upper = preds[:, 1] + qhat
+
+        return lower.squeeze(), upper.squeeze()
+
+    return predictor

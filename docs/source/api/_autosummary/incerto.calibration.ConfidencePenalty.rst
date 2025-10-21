@@ -1,0 +1,81 @@
+﻿incerto.calibration.ConfidencePenalty
+=====================================
+
+.. currentmodule:: incerto.calibration
+
+.. autoclass:: ConfidencePenalty
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~ConfidencePenalty.__init__
+      ~ConfidencePenalty.add_module
+      ~ConfidencePenalty.apply
+      ~ConfidencePenalty.bfloat16
+      ~ConfidencePenalty.buffers
+      ~ConfidencePenalty.children
+      ~ConfidencePenalty.compile
+      ~ConfidencePenalty.cpu
+      ~ConfidencePenalty.cuda
+      ~ConfidencePenalty.double
+      ~ConfidencePenalty.eval
+      ~ConfidencePenalty.extra_repr
+      ~ConfidencePenalty.float
+      ~ConfidencePenalty.forward
+      ~ConfidencePenalty.get_buffer
+      ~ConfidencePenalty.get_extra_state
+      ~ConfidencePenalty.get_parameter
+      ~ConfidencePenalty.get_submodule
+      ~ConfidencePenalty.half
+      ~ConfidencePenalty.ipu
+      ~ConfidencePenalty.load_state_dict
+      ~ConfidencePenalty.modules
+      ~ConfidencePenalty.mtia
+      ~ConfidencePenalty.named_buffers
+      ~ConfidencePenalty.named_children
+      ~ConfidencePenalty.named_modules
+      ~ConfidencePenalty.named_parameters
+      ~ConfidencePenalty.parameters
+      ~ConfidencePenalty.register_backward_hook
+      ~ConfidencePenalty.register_buffer
+      ~ConfidencePenalty.register_forward_hook
+      ~ConfidencePenalty.register_forward_pre_hook
+      ~ConfidencePenalty.register_full_backward_hook
+      ~ConfidencePenalty.register_full_backward_pre_hook
+      ~ConfidencePenalty.register_load_state_dict_post_hook
+      ~ConfidencePenalty.register_load_state_dict_pre_hook
+      ~ConfidencePenalty.register_module
+      ~ConfidencePenalty.register_parameter
+      ~ConfidencePenalty.register_state_dict_post_hook
+      ~ConfidencePenalty.register_state_dict_pre_hook
+      ~ConfidencePenalty.requires_grad_
+      ~ConfidencePenalty.set_extra_state
+      ~ConfidencePenalty.set_submodule
+      ~ConfidencePenalty.share_memory
+      ~ConfidencePenalty.state_dict
+      ~ConfidencePenalty.to
+      ~ConfidencePenalty.to_empty
+      ~ConfidencePenalty.train
+      ~ConfidencePenalty.type
+      ~ConfidencePenalty.xpu
+      ~ConfidencePenalty.zero_grad
+   
+   
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~ConfidencePenalty.T_destination
+      ~ConfidencePenalty.call_super_init
+      ~ConfidencePenalty.dump_patches
+      ~ConfidencePenalty.training
+   
+   

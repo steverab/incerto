@@ -19,6 +19,8 @@ from incerto.calibration import (
     IsotonicRegressionCalibrator,
     HistogramBinningCalibrator,
     PlattScalingCalibrator,
+    DirichletCalibrator,
+    BetaCalibrator,
 )
 
 
@@ -478,3 +480,142 @@ class TestEdgeCases:
 
         assert probs.shape == (n_samples, num_classes)
         assert torch.allclose(probs.sum(dim=1), torch.ones(n_samples), atol=1e-5)
+
+
+class TestDirichletCalibrator:
+    """Test DirichletCalibrator."""
+
+    def test_initialization(self, num_classes):
+        """Test calibrator can be initialized."""
+        calibrator = DirichletCalibrator(n_classes=num_classes)
+        assert calibrator.weight.shape == (num_classes, num_classes)
+        assert calibrator.bias.shape == (num_classes,)
+
+    def test_initialization_with_mu(self, num_classes):
+        """Test initialization with explicit mu."""
+        calibrator = DirichletCalibrator(n_classes=num_classes, mu=0.01)
+        assert calibrator.mu == 0.01
+
+    def test_fit_learns_transformation(self, calibration_split, num_classes):
+        """Test fit learns Dirichlet transformation."""
+        calibrator = DirichletCalibrator(n_classes=num_classes)
+        calibrator.fit(
+            calibration_split["train_logits"],
+            calibration_split["train_labels"],
+            max_iters=50,  # Reduced for faster testing
+        )
+        # Should have learned weight matrix and bias
+        assert calibrator.weight.shape == (num_classes, num_classes)
+        assert calibrator.bias.shape == (num_classes,)
+
+    def test_predict_shape(self, calibration_split, num_classes):
+        """Test predict preserves shape."""
+        calibrator = DirichletCalibrator(n_classes=num_classes)
+        calibrator.fit(
+            calibration_split["train_logits"],
+            calibration_split["train_labels"],
+            max_iters=50,
+        )
+
+        probs = calibrator.predict(calibration_split["val_logits"]).probs
+
+        assert probs.shape == calibration_split["val_logits"].shape
+
+    def test_valid_probabilities(
+        self, calibration_split, num_classes, check_probability
+    ):
+        """Test predict returns valid probabilities."""
+        calibrator = DirichletCalibrator(n_classes=num_classes)
+        calibrator.fit(
+            calibration_split["train_logits"],
+            calibration_split["train_labels"],
+            max_iters=50,
+        )
+
+        probs = calibrator.predict(calibration_split["val_logits"]).probs
+        check_probability(probs, dim=1)
+
+    def test_regularization_mu(self, calibration_split, num_classes):
+        """Test different regularization strengths."""
+        for mu in [None, 0.01, 0.1]:
+            calibrator = DirichletCalibrator(n_classes=num_classes, mu=mu)
+            calibrator.fit(
+                calibration_split["train_logits"],
+                calibration_split["train_labels"],
+                max_iters=30,
+            )
+            probs = calibrator.predict(calibration_split["val_logits"]).probs
+            assert probs.shape == calibration_split["val_logits"].shape
+
+
+class TestBetaCalibrator:
+    """Test BetaCalibrator (binary classification)."""
+
+    def test_initialization(self):
+        """Test calibrator can be initialized."""
+        calibrator = BetaCalibrator()
+        assert calibrator is not None
+
+    def test_fit_binary(self):
+        """Test fit on binary classification."""
+        calibrator = BetaCalibrator()
+
+        # Create binary data
+        n_samples = 200
+        logits = torch.randn(n_samples, 2)
+        labels = torch.randint(0, 2, (n_samples,))
+
+        calibrator.fit(logits, labels)
+
+        # Should have fitted calibrator
+        assert calibrator.calibrator is not None
+
+    def test_predict_shape_binary(self):
+        """Test predict preserves shape for binary classification."""
+        calibrator = BetaCalibrator()
+
+        # Create binary data
+        n_samples = 200
+        logits_train = torch.randn(n_samples, 2)
+        labels_train = torch.randint(0, 2, (n_samples,))
+
+        calibrator.fit(logits_train, labels_train)
+
+        # Test prediction
+        logits_test = torch.randn(50, 2)
+        probs = calibrator.predict(logits_test).probs
+
+        assert probs.shape == (50, 2)
+
+    def test_valid_probabilities_binary(self, check_probability):
+        """Test predict returns valid probabilities."""
+        calibrator = BetaCalibrator()
+
+        # Create binary data
+        n_samples = 200
+        logits_train = torch.randn(n_samples, 2)
+        labels_train = torch.randint(0, 2, (n_samples,))
+
+        calibrator.fit(logits_train, labels_train)
+
+        # Test prediction
+        logits_test = torch.randn(50, 2)
+        probs = calibrator.predict(logits_test).probs
+
+        check_probability(probs, dim=1)
+
+    def test_multiclass_fallback_to_isotonic(self, calibration_split):
+        """Test Beta calibrator falls back to Isotonic for multiclass."""
+        calibrator = BetaCalibrator()
+
+        # Fit on multiclass data (should use isotonic regression internally)
+        calibrator.fit(
+            calibration_split["train_logits"], calibration_split["train_labels"]
+        )
+
+        probs = calibrator.predict(calibration_split["val_logits"]).probs
+
+        # Should still work and return valid probabilities
+        assert probs.shape == calibration_split["val_logits"].shape
+        assert (probs >= 0).all() and (probs <= 1).all()
+        assert torch.allclose(probs.sum(dim=1), torch.ones(probs.shape[0]), atol=1e-5)

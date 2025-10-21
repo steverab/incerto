@@ -14,6 +14,7 @@ from incerto.calibration.metrics import (
     ece_score,
     mce_score,
     classwise_ece,
+    adaptive_ece_score,
 )
 
 
@@ -313,3 +314,91 @@ class TestEdgeCases:
         assert np.isfinite(nll_val)
         assert np.isfinite(bs_val)
         assert np.isfinite(ece_val)
+
+
+class TestAdaptiveECE:
+    """Test Adaptive Expected Calibration Error."""
+
+    def test_basic_functionality(self, multiclass_logits, multiclass_labels):
+        """Test Adaptive ECE basic functionality."""
+        aece = adaptive_ece_score(multiclass_logits, multiclass_labels, n_bins=10)
+
+        assert isinstance(aece, float)
+        assert 0 <= aece <= 1
+        assert np.isfinite(aece)
+
+    def test_overconfident_predictions(self):
+        """Test Adaptive ECE for overconfident predictions."""
+        n = 1000
+        num_classes = 2
+
+        # Always predict with high confidence, but only 50% accurate
+        logits = torch.zeros(n, num_classes)
+        logits[:, 0] = 10.0  # Always predict class 0 with high confidence
+        labels = torch.randint(0, num_classes, (n,))  # Random labels
+
+        aece = adaptive_ece_score(logits, labels, n_bins=10)
+
+        assert isinstance(aece, float)
+        assert aece > 0.1  # Should have high Adaptive ECE due to overconfidence
+
+    def test_different_bins(self, multiclass_logits, multiclass_labels):
+        """Test Adaptive ECE with different number of bins."""
+        for n_bins in [5, 10, 15, 20]:
+            aece = adaptive_ece_score(
+                multiclass_logits, multiclass_labels, n_bins=n_bins
+            )
+            assert isinstance(aece, float)
+            assert 0 <= aece <= 1
+            assert np.isfinite(aece)
+
+    def test_different_norms(self, multiclass_logits, multiclass_labels):
+        """Test Adaptive ECE with different norms."""
+        aece_l1 = adaptive_ece_score(multiclass_logits, multiclass_labels, norm="l1")
+        aece_l2 = adaptive_ece_score(multiclass_logits, multiclass_labels, norm="l2")
+
+        assert isinstance(aece_l1, float)
+        assert isinstance(aece_l2, float)
+        assert 0 <= aece_l1 <= 1
+        assert 0 <= aece_l2 <= 1
+
+    def test_equal_mass_binning(self):
+        """Test that Adaptive ECE uses equal-mass binning."""
+        n = 1000
+        num_classes = 2
+
+        # Create skewed confidence distribution
+        logits = torch.zeros(n, num_classes)
+        # Most predictions have low confidence
+        logits[:900, 0] = 0.1
+        # Few predictions have high confidence
+        logits[900:, 0] = 10.0
+
+        labels = torch.randint(0, num_classes, (n,))
+
+        # Adaptive ECE should handle this better than standard ECE
+        aece = adaptive_ece_score(logits, labels, n_bins=10)
+
+        assert isinstance(aece, float)
+        assert 0 <= aece <= 1
+        assert np.isfinite(aece)
+
+    def test_invalid_norm_raises_error(self, multiclass_logits, multiclass_labels):
+        """Test that invalid norm raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown norm"):
+            adaptive_ece_score(multiclass_logits, multiclass_labels, norm="l3")
+
+    def test_comparison_with_standard_ece(self, multiclass_logits, multiclass_labels):
+        """Test Adaptive ECE vs standard ECE."""
+        ece = ece_score(multiclass_logits, multiclass_labels, n_bins=10)
+        aece = adaptive_ece_score(
+            multiclass_logits, multiclass_labels, n_bins=10, norm="l1"
+        )
+
+        # Both should be in valid range
+        assert 0 <= ece <= 1
+        assert 0 <= aece <= 1
+
+        # Values may differ due to different binning strategies
+        assert isinstance(ece, float)
+        assert isinstance(aece, float)

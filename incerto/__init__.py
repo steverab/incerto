@@ -8,6 +8,8 @@ Submodules:
     - ood: Out-of-distribution detection methods
     - shift: Distribution shift detection
     - sp: Selective prediction with rejection/abstention
+    - bayesian: Bayesian deep learning methods
+    - active: Active learning for efficient data labeling
 """
 
 __version__ = "0.1.0"
@@ -22,6 +24,8 @@ from . import llm
 from . import ood
 from . import shift
 from . import sp
+from . import bayesian
+from . import active
 
 __all__ = [
     "__version__",
@@ -32,4 +36,6 @@ __all__ = [
     "ood",
     "shift",
     "sp",
+    "bayesian",
+    "active",
 ]
