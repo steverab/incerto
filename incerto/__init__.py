@@ -17,6 +17,16 @@ __version__ = "0.1.0"
 # Core utilities
 from .core import predictive_entropy
 
+# Exceptions
+from .exceptions import (
+    IncertoError,
+    NotFittedError,
+    CalibrationError,
+    SerializationError,
+    ConfigurationError,
+    DataError,
+)
+
 # Submodules - import them so users can do `from incerto import calibration`
 from . import calibration
 from . import conformal
@@ -30,6 +40,14 @@ from . import active
 __all__ = [
     "__version__",
     "predictive_entropy",
+    # Exceptions
+    "IncertoError",
+    "NotFittedError",
+    "CalibrationError",
+    "SerializationError",
+    "ConfigurationError",
+    "DataError",
+    # Modules
     "calibration",
     "conformal",
     "llm",

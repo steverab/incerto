@@ -1,19 +1,35 @@
 """
 Entropy and information-theoretic measures.
+
+This module provides numpy-based entropy calculations for single probability distributions.
+For batched torch tensor operations, see incerto.bayesian.utils.
 """
 
 import numpy as np
 
 
-def predictive_entropy(probs):
+def entropy(probs: np.ndarray) -> float:
     """
-    Calculate the predictive entropy of a probability distribution.
+    Calculate the Shannon entropy of a probability distribution.
 
-    Parameters:
-    probs (np.ndarray): A 1D array of probabilities.
+    This is a general-purpose entropy function for numpy arrays.
+    For PyTorch tensors with batched predictions, use
+    `incerto.bayesian.utils.predictive_entropy` instead.
+
+    Args:
+        probs: A 1D numpy array of probabilities that sum to 1.
 
     Returns:
-    float: The predictive entropy.
+        The Shannon entropy H(p) = -∑ p(x) log p(x)
+
+    Raises:
+        TypeError: If probs is not a numpy array
+        ValueError: If probabilities are not in [0, 1]
+
+    Example:
+        >>> probs = np.array([0.7, 0.2, 0.1])
+        >>> entropy(probs)
+        0.8018...
     """
     if not isinstance(probs, np.ndarray):
         raise TypeError("Input must be a numpy array.")
@@ -24,6 +40,8 @@ def predictive_entropy(probs):
     if np.isclose(np.sum(probs), 0):
         return 0.0
 
-    return -np.sum(
-        probs * np.log(probs + 1e-10)
-    )  # Adding a small constant to avoid log(0)
+    return float(-np.sum(probs * np.log(probs + 1e-10)))
+
+
+# Alias for backward compatibility
+predictive_entropy = entropy

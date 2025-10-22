@@ -10,18 +10,34 @@ from typing import Tuple
 
 def predictive_entropy(predictions: torch.Tensor) -> torch.Tensor:
     """
-    Compute predictive entropy (total uncertainty).
+    Compute predictive entropy for batched Bayesian predictions (total uncertainty).
 
-    H[y|x] = -∑ p(y|x) log p(y|x)
+    This function is specialized for Bayesian deep learning where you have multiple
+    posterior samples. For simple entropy of a single probability distribution,
+    use `incerto.core.entropy` instead.
 
+    Computes: H[y|x] = -∑ p(y|x) log p(y|x)
     where p(y|x) is the predictive distribution averaged over the posterior.
 
     Args:
         predictions: Tensor of shape (num_samples, batch_size, num_classes)
-                    containing probability distributions
+                    containing probability distributions from multiple posterior samples.
+                    Each sample represents p(y|x,θ) for a different parameter θ.
 
     Returns:
-        Predictive entropy of shape (batch_size,)
+        Predictive entropy of shape (batch_size,) representing the total
+        uncertainty for each input.
+
+    Example:
+        >>> # Ensemble of 10 models, batch of 32, 5 classes
+        >>> predictions = torch.softmax(torch.randn(10, 32, 5), dim=-1)
+        >>> total_uncertainty = predictive_entropy(predictions)
+        >>> total_uncertainty.shape
+        torch.Size([32])
+
+    See Also:
+        - mutual_information: For epistemic uncertainty
+        - decompose_uncertainty: For full decomposition
     """
     # Average predictions over samples
     mean_probs = predictions.mean(dim=0)
@@ -68,33 +84,37 @@ def expected_calibration_error(
     """
     Compute Expected Calibration Error for Bayesian predictions.
 
+    This is a convenience wrapper around incerto.calibration.ece_score
+    that handles the mean prediction from an ensemble.
+
     Args:
-        predictions: Mean predictions (batch_size, num_classes)
+        predictions: Mean predictions (batch_size, num_classes).
+                    For ensembles, average the predictions first.
         labels: True labels (batch_size,)
         n_bins: Number of bins for calibration
 
     Returns:
         ECE score
+
+    Example:
+        >>> # For ensemble predictions
+        >>> ensemble_preds = torch.softmax(torch.randn(10, 32, 5), dim=-1)
+        >>> mean_preds = ensemble_preds.mean(dim=0)
+        >>> # Convert to logits for ECE
+        >>> logits = torch.log(mean_preds + 1e-10)
+        >>> ece = expected_calibration_error(mean_preds, labels, n_bins=10)
+
+    See Also:
+        incerto.calibration.ece_score: The canonical ECE implementation
     """
-    confidences, pred_labels = predictions.max(dim=-1)
-    accuracies = (pred_labels == labels).float()
+    # Convert probabilities to logits for the canonical ece_score function
+    # Use log to convert, with small epsilon to avoid log(0)
+    logits = torch.log(predictions + 1e-10)
 
-    # Bin predictions
-    bin_boundaries = torch.linspace(0, 1, n_bins + 1)
-    bin_lowers = bin_boundaries[:-1]
-    bin_uppers = bin_boundaries[1:]
+    # Import here to avoid circular dependency
+    from incerto.calibration.metrics import ece_score
 
-    ece = 0.0
-    for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
-        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
-        prop_in_bin = in_bin.float().mean()
-
-        if prop_in_bin > 0:
-            accuracy_in_bin = accuracies[in_bin].mean()
-            avg_confidence_in_bin = confidences[in_bin].mean()
-            ece += prop_in_bin * abs(avg_confidence_in_bin - accuracy_in_bin)
-
-    return ece.item()
+    return ece_score(logits, labels, n_bins=n_bins)
 
 
 def decompose_uncertainty(

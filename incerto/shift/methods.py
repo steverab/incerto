@@ -43,6 +43,22 @@ class MMDShiftDetector(BaseShiftDetector):
         k_xy = self._rbf(x, y).mean()
         return (k_xx + k_yy - 2 * k_xy).item()
 
+    def state_dict(self) -> dict:
+        """Save MMD detector state."""
+        state = super().state_dict()
+        state["sigma"] = self.sigma
+        return state
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load MMD detector state."""
+        super().load_state_dict(state)
+        self.sigma = state["sigma"]
+
+    def __repr__(self) -> str:
+        fitted = hasattr(self, "_reference")
+        n_samples = len(self._reference) if fitted else "not fitted"
+        return f"MMDShiftDetector(sigma={self.sigma}, n_ref_samples={n_samples})"
+
 
 class EnergyShiftDetector(BaseShiftDetector):
     """Energy distance – Szekely & Rizzo, 2013."""
@@ -50,6 +66,11 @@ class EnergyShiftDetector(BaseShiftDetector):
     def _compute(self, test: torch.Tensor) -> float:
         x, y = self._reference, test
         return metrics.energy_distance(x, y)  # re-use metric
+
+    def __repr__(self) -> str:
+        fitted = hasattr(self, "_reference")
+        n_samples = len(self._reference) if fitted else "not fitted"
+        return f"EnergyShiftDetector(n_ref_samples={n_samples})"
 
 
 class KSShiftDetector(BaseShiftDetector):
@@ -60,6 +81,16 @@ class KSShiftDetector(BaseShiftDetector):
             stats.ks_2samp(x.cpu().numpy(), test[:, i].cpu().numpy()).statistic
             for i, x in enumerate(self._reference.T)
         )
+
+    def __repr__(self) -> str:
+        fitted = hasattr(self, "_reference")
+        if fitted:
+            n_samples = len(self._reference)
+            n_features = self._reference.shape[1] if self._reference.dim() > 1 else 1
+            return (
+                f"KSShiftDetector(n_ref_samples={n_samples}, n_features={n_features})"
+            )
+        return "KSShiftDetector(not fitted)"
 
 
 # ------------------------------------------------------------------------- #
@@ -88,6 +119,28 @@ class ClassifierShiftDetector(BaseShiftDetector):
         proba = self.clf.predict_proba(X_test)[:, 1]
         # Mean output probability should be ~0.5 under no shift
         return abs(proba.mean() - 0.5) * 2
+
+    def state_dict(self) -> dict:
+        """Save classifier shift detector state."""
+        import pickle
+
+        state = super().state_dict()
+        state["clf"] = pickle.dumps(self.clf)
+        state["device"] = self.device
+        return state
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load classifier shift detector state."""
+        import pickle
+
+        super().load_state_dict(state)
+        self.clf = pickle.loads(state["clf"])
+        self.device = state["device"]
+
+    def __repr__(self) -> str:
+        fitted = hasattr(self, "_reference")
+        n_samples = len(self._reference) if fitted else "not fitted"
+        return f"ClassifierShiftDetector(n_ref_samples={n_samples})"
 
 
 # Alias for BBSD
@@ -256,6 +309,55 @@ class LabelShiftDetector:
         else:
             raise ValueError(f"Unknown metric: {metric}")
 
+    def state_dict(self) -> dict:
+        """Save label shift detector state."""
+        return {
+            "num_classes": self.num_classes,
+            "calibrated": self.calibrated,
+            "source_label_dist": self.source_label_dist,
+            "confusion_matrix": self.confusion_matrix,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load label shift detector state."""
+        from ..exceptions import SerializationError
+
+        try:
+            self.num_classes = state["num_classes"]
+            self.calibrated = state["calibrated"]
+            self.source_label_dist = state["source_label_dist"]
+            self.confusion_matrix = state["confusion_matrix"]
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def save(self, path: str) -> None:
+        """Save label shift detector state."""
+        from ..exceptions import SerializationError
+
+        try:
+            torch.save(self.state_dict(), path)
+        except Exception as e:
+            raise SerializationError(f"Failed to save to {path}: {e}") from e
+
+    @classmethod
+    def load(
+        cls, path: str, num_classes: int, calibrated: bool = False
+    ) -> "LabelShiftDetector":
+        """Load label shift detector from file."""
+        from ..exceptions import SerializationError
+
+        try:
+            detector = cls(num_classes, calibrated)
+            state = torch.load(path)
+            detector.load_state_dict(state)
+            return detector
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
+
+    def __repr__(self) -> str:
+        fitted = self.source_label_dist is not None
+        return f"LabelShiftDetector(num_classes={self.num_classes}, calibrated={self.calibrated}, fitted={fitted})"
+
 
 class ImportanceWeightingShift:
     """
@@ -412,3 +514,53 @@ class ImportanceWeightingShift:
             Weighted average loss
         """
         return (loss * weights).mean()
+
+    def state_dict(self) -> dict:
+        """Save importance weighting state."""
+        import pickle
+
+        return {
+            "method": self.method,
+            "alpha": self.alpha,
+            "weights_model": pickle.dumps(self.weights_model),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load importance weighting state."""
+        import pickle
+        from ..exceptions import SerializationError
+
+        try:
+            self.method = state["method"]
+            self.alpha = state["alpha"]
+            self.weights_model = pickle.loads(state["weights_model"])
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def save(self, path: str) -> None:
+        """Save importance weighting state."""
+        from ..exceptions import SerializationError
+
+        try:
+            torch.save(self.state_dict(), path)
+        except Exception as e:
+            raise SerializationError(f"Failed to save to {path}: {e}") from e
+
+    @classmethod
+    def load(
+        cls, path: str, method: str = "logistic", alpha: float = 0.01
+    ) -> "ImportanceWeightingShift":
+        """Load importance weighting from file."""
+        from ..exceptions import SerializationError
+
+        try:
+            instance = cls(method, alpha)
+            state = torch.load(path)
+            instance.load_state_dict(state)
+            return instance
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
+
+    def __repr__(self) -> str:
+        fitted = self.weights_model is not None
+        return f"ImportanceWeightingShift(method='{self.method}', alpha={self.alpha}, fitted={fitted})"

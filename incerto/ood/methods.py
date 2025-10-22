@@ -12,6 +12,9 @@ class MSP(OODDetector):
         logits = self.model(x)
         return 1 - F.softmax(logits, dim=-1).max(dim=-1).values
 
+    def __repr__(self) -> str:
+        return "MSP()"
+
 
 class Energy(OODDetector):
     """Energy-based score (Liu et al., NeurIPS 2020)."""
@@ -23,6 +26,17 @@ class Energy(OODDetector):
     def score(self, x):
         e = -torch.logsumexp(self.model(x) / self.T, dim=-1)
         return e
+
+    def state_dict(self) -> dict:
+        """Save temperature parameter."""
+        return {"temperature": self.T}
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load temperature parameter."""
+        self.T = state["temperature"]
+
+    def __repr__(self) -> str:
+        return f"Energy(temperature={self.T})"
 
 
 class ODIN(OODDetector):
@@ -41,6 +55,18 @@ class ODIN(OODDetector):
         x_adv = x + self.eps * x.grad.sign()
         logits_adv = self.model(x_adv) / self.T
         return -F.softmax(logits_adv, dim=-1).max(dim=-1).values
+
+    def state_dict(self) -> dict:
+        """Save ODIN hyperparameters."""
+        return {"temperature": self.T, "epsilon": self.eps}
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load ODIN hyperparameters."""
+        self.T = state["temperature"]
+        self.eps = state["epsilon"]
+
+    def __repr__(self) -> str:
+        return f"ODIN(temperature={self.T}, epsilon={self.eps})"
 
 
 class Mahalanobis(OODDetector):
@@ -86,6 +112,30 @@ class Mahalanobis(OODDetector):
                 return lambda: self._tmp
         raise ValueError(f"Layer {name} not found")
 
+    def state_dict(self) -> dict:
+        """Save fitted Mahalanobis parameters."""
+        return {
+            "class_means": self.class_means,
+            "precision": self.precision,
+            "layer_name": getattr(self, "_layer_name", "penultimate"),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load fitted Mahalanobis parameters."""
+        from ..exceptions import SerializationError
+
+        try:
+            self.class_means = state["class_means"]
+            self.precision = state["precision"]
+            self._layer_name = state.get("layer_name", "penultimate")
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        fitted = self.class_means is not None
+        n_classes = len(self.class_means) if fitted else "not fitted"
+        return f"Mahalanobis(layer='penultimate', n_classes={n_classes})"
+
 
 class MaxLogit(OODDetector):
     """
@@ -99,6 +149,9 @@ class MaxLogit(OODDetector):
         logits = self.model(x)
         # Return negative max logit (higher logit = more ID-like)
         return -logits.max(dim=-1).values
+
+    def __repr__(self) -> str:
+        return "MaxLogit()"
 
 
 class KNN(OODDetector):
@@ -146,3 +199,27 @@ class KNN(OODDetector):
                 )
                 return lambda: self._tmp
         raise ValueError(f"Layer {name} not found")
+
+    def state_dict(self) -> dict:
+        """Save KNN training features."""
+        return {
+            "k": self.k,
+            "layer_name": getattr(self, "_layer_name", "penultimate"),
+            "train_features": self.train_features,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load KNN training features."""
+        from ..exceptions import SerializationError
+
+        try:
+            self.k = state["k"]
+            self._layer_name = state.get("layer_name", "penultimate")
+            self.train_features = state["train_features"]
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        fitted = self.train_features is not None
+        n_samples = len(self.train_features) if fitted else "not fitted"
+        return f"KNN(k={self.k}, n_train_samples={n_samples})"

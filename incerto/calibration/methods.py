@@ -22,6 +22,17 @@ class IdentityCalibrator(BaseCalibrator):
         probs = F.softmax(logits, dim=1)
         return Categorical(probs=probs)
 
+    def state_dict(self) -> dict:
+        """Return empty state dict (no parameters to save)."""
+        return {}
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load state (no-op for identity calibrator)."""
+        pass
+
+    def __repr__(self) -> str:
+        return "IdentityCalibrator()"
+
 
 class TemperatureScaling(nn.Module, BaseCalibrator):
     """
@@ -76,6 +87,9 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
 
+    def __repr__(self) -> str:
+        return f"TemperatureScaling(temperature={self.temperature.item():.4f})"
+
 
 class IsotonicRegressionCalibrator(BaseCalibrator):
     """
@@ -112,6 +126,31 @@ class IsotonicRegressionCalibrator(BaseCalibrator):
         # re-normalize
         calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
         return Categorical(probs=calibrated)
+
+    def state_dict(self) -> dict:
+        """Save isotonic regression calibrators."""
+        import pickle
+
+        return {
+            "n_classes": self.n_classes,
+            "out_of_bounds": self.out_of_bounds,
+            "calibrators": pickle.dumps(self.calibrators),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load isotonic regression calibrators."""
+        import pickle
+        from ..exceptions import SerializationError
+
+        try:
+            self.n_classes = state["n_classes"]
+            self.out_of_bounds = state["out_of_bounds"]
+            self.calibrators = pickle.loads(state["calibrators"])
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        return f"IsotonicRegressionCalibrator(n_classes={self.n_classes}, out_of_bounds='{self.out_of_bounds}')"
 
 
 class HistogramBinningCalibrator(BaseCalibrator):
@@ -165,6 +204,31 @@ class HistogramBinningCalibrator(BaseCalibrator):
         calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
         return Categorical(probs=calibrated)
 
+    def state_dict(self) -> dict:
+        """Save histogram binning state."""
+        return {
+            "n_bins": self.n_bins,
+            "bin_edges": self.bin_edges,
+            "bin_true_rates": self.bin_true_rates,
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load histogram binning state."""
+        from ..exceptions import SerializationError
+
+        try:
+            self.n_bins = state["n_bins"]
+            self.bin_edges = state["bin_edges"]
+            self.bin_true_rates = state["bin_true_rates"]
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        n_classes = len(self.bin_edges) if self.bin_edges else 0
+        return (
+            f"HistogramBinningCalibrator(n_bins={self.n_bins}, n_classes={n_classes})"
+        )
+
 
 class PlattScalingCalibrator(BaseCalibrator):
     """
@@ -198,6 +262,29 @@ class PlattScalingCalibrator(BaseCalibrator):
         calibrated = torch.tensor(calibrated, device=logits.device, dtype=torch.float32)
         calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
         return Categorical(probs=calibrated)
+
+    def state_dict(self) -> dict:
+        """Save Platt scaling models."""
+        import pickle
+
+        return {
+            "n_classes": self.n_classes,
+            "models": pickle.dumps(self.models),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load Platt scaling models."""
+        import pickle
+        from ..exceptions import SerializationError
+
+        try:
+            self.n_classes = state["n_classes"]
+            self.models = pickle.loads(state["models"])
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        return f"PlattScalingCalibrator(n_classes={self.n_classes})"
 
 
 class VectorScaling(nn.Module, BaseCalibrator):
@@ -252,6 +339,10 @@ class VectorScaling(nn.Module, BaseCalibrator):
         scaled = self.forward(logits)
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
+
+    def __repr__(self) -> str:
+        temps = self.temperature.detach().cpu().numpy()
+        return f"VectorScaling(n_classes={len(temps)}, temperature_range=[{temps.min():.4f}, {temps.max():.4f}])"
 
 
 class MatrixScaling(nn.Module, BaseCalibrator):
@@ -309,6 +400,10 @@ class MatrixScaling(nn.Module, BaseCalibrator):
         scaled = self.forward(logits)
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
+
+    def __repr__(self) -> str:
+        n_classes = self.weight.shape[0]
+        return f"MatrixScaling(n_classes={n_classes})"
 
 
 class DirichletCalibrator(nn.Module, BaseCalibrator):
@@ -400,6 +495,10 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
         probs = F.softmax(transformed, dim=1)
         return Categorical(probs=probs)
 
+    def __repr__(self) -> str:
+        mu_str = f"{self.mu:.4f}" if self.mu is not None else "None"
+        return f"DirichletCalibrator(n_classes={self.n_classes}, mu={mu_str})"
+
 
 class BetaCalibrator(BaseCalibrator):
     """
@@ -486,3 +585,34 @@ class BetaCalibrator(BaseCalibrator):
         probs_both = torch.stack([1 - calibrated_probs, calibrated_probs], dim=1)
 
         return Categorical(probs=probs_both)
+
+    def state_dict(self) -> dict:
+        """Save Beta calibrator state."""
+        import pickle
+
+        return {
+            "method": self.method,
+            "a": self.a,
+            "b": self.b,
+            "map_params": self.map_params,
+            "is_binary": getattr(self, "is_binary", None),
+            "calibrator": pickle.dumps(getattr(self, "calibrator", None)),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        """Load Beta calibrator state."""
+        import pickle
+        from ..exceptions import SerializationError
+
+        try:
+            self.method = state["method"]
+            self.a = state["a"]
+            self.b = state["b"]
+            self.map_params = state["map_params"]
+            self.is_binary = state["is_binary"]
+            self.calibrator = pickle.loads(state["calibrator"])
+        except Exception as e:
+            raise SerializationError(f"Failed to load state: {e}") from e
+
+    def __repr__(self) -> str:
+        return f"BetaCalibrator(method='{self.method}')"

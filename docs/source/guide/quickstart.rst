@@ -190,6 +190,48 @@ Detect shifts between training and deployment data:
    )
    print(f"C2ST accuracy: {c2st_result['accuracy']:.4f}")
 
+Saving and Loading Models
+--------------------------
+
+All calibrators, OOD detectors, and shift detectors support serialization:
+
+.. code-block:: python
+
+   from incerto.calibration import TemperatureScaling
+   from incerto.ood import Energy
+   from incerto.shift import MMDShiftDetector
+
+   # Calibrator example
+   calibrator = TemperatureScaling()
+   calibrator.fit(val_logits, val_labels)
+
+   # Save to file
+   calibrator.save('calibrator.pt')
+
+   # Load from file (need to create instance first)
+   new_calibrator = TemperatureScaling()
+   new_calibrator.load_state_dict(torch.load('calibrator.pt'))
+
+   # Or use state_dict directly
+   state = calibrator.state_dict()
+   torch.save(state, 'calibrator_state.pt')
+
+   # OOD detector example (model not saved, only detector state)
+   detector = Energy(model, temperature=2.0)
+   detector.save('detector_state.pt')
+
+   # When loading, provide the model again
+   loaded_detector = Energy(model)
+   loaded_detector.load_state_dict(torch.load('detector_state.pt'))
+
+   # Shift detector example
+   shift_detector = MMDShiftDetector(sigma=1.5)
+   shift_detector.fit(reference_loader)
+   shift_detector.save('shift_detector.pt')
+
+   # Load using class method
+   loaded_shift = MMDShiftDetector.load('shift_detector.pt')
+
 Next Steps
 ----------
 
