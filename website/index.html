@@ -18,30 +18,896 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-    <!-- Styles -->
-    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- Syntax Highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" id="highlight-light">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" id="highlight-dark" disabled>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+
+    <style>
+        /* ============================================
+           CSS Variables for Theme
+           ============================================ */
+        :root {
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+            /* Light theme colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e9ecef;
+            --text-primary: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --text-tertiary: #6c757d;
+            --border-color: #dee2e6;
+            --accent-primary: #2563eb;
+            --accent-hover: #1d4ed8;
+            --accent-light: #dbeafe;
+            --code-bg: #f6f8fa;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #e6edf3;
+            --text-secondary: #c9d1d9;
+            --text-tertiary: #8b949e;
+            --border-color: #30363d;
+            --accent-primary: #3b82f6;
+            --accent-hover: #60a5fa;
+            --accent-light: #1e3a8a;
+            --code-bg: #161b22;
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        /* ============================================
+           Base Styles
+           ============================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* ============================================
+           Navigation
+           ============================================ */
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background-color: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            box-shadow: var(--shadow);
+        }
+
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .nav-brand:hover {
+            opacity: 0.8;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+        }
+
+        .brand-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            padding: 0.5rem 0.875rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-primary);
+            background-color: var(--bg-secondary);
+        }
+
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .hamburger span {
+            display: block;
+            width: 24px;
+            height: 2px;
+            background-color: currentColor;
+            margin: 5px 0;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger.active span:nth-child(1) {
+            transform: rotate(45deg) translate(6px, 6px);
+        }
+
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(6px, -6px);
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border-color);
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--bg-secondary);
+            border-color: var(--accent-primary);
+        }
+
+        /* ============================================
+           Hero Section
+           ============================================ */
+        .hero {
+            padding: 4rem 0 3rem;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 0.4rem 0.9rem;
+            background-color: var(--accent-light);
+            color: var(--accent-primary);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-title {
+            font-size: 3.25rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 1.25rem;
+            color: var(--text-primary);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-primary) 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 2rem;
+            line-height: 1.7;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 2.5rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            margin-top: 0.25rem;
+        }
+
+        /* ============================================
+           Section Styles
+           ============================================ */
+        section {
+            padding: 3.5rem 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        .section-header p {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+        }
+
+        /* ============================================
+           Features Grid
+           ============================================ */
+        .features {
+            background-color: var(--bg-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.75rem;
+        }
+
+        .feature-card {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.75rem;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent-primary);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 1.25rem;
+        }
+
+        .feature-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Icon adjustments for dark mode */
+        [data-theme="dark"] .feature-icon img,
+        [data-theme="dark"] .brand-icon img {
+            filter: invert(1) hue-rotate(90deg) brightness(1) contrast(1);
+        }
+
+        .feature-card h3 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            margin-bottom: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .feature-card > p {
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            line-height: 1.6;
+            text-align: left;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+        }
+
+        .feature-list li {
+            padding: 0.4rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+        }
+
+        .feature-list li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--accent-primary);
+            font-weight: bold;
+        }
+
+        /* ============================================
+           Installation Section
+           ============================================ */
+        .install-cards {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.75rem;
+            margin-bottom: 2.5rem;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        @media (max-width: 900px) {
+            .install-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .install-card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.75rem;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .install-card h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            color: var(--text-primary);
+        }
+
+        .requirements {
+            text-align: center;
+            padding: 1.75rem;
+            background-color: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        .requirements h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .req-badges {
+            display: flex;
+            justify-content: center;
+            gap: 0.875rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 0.45rem 0.9rem;
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* ============================================
+           Code Blocks
+           ============================================ */
+        .code-block {
+            position: relative;
+            background-color: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .code-block:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1.25rem 1.5rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.625rem;
+            right: 0.625rem;
+            width: 32px;
+            height: 32px;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            opacity: 0;
+        }
+
+        .copy-btn:hover {
+            background-color: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .copy-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ============================================
+           Examples Tabs
+           ============================================ */
+        .examples {
+            background-color: var(--bg-secondary);
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.75rem;
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.25rem;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .example-description {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 1.25rem;
+            padding: 1rem 1.25rem;
+            background-color: var(--bg-primary);
+            border-left: 3px solid var(--accent-primary);
+            border-radius: 4px;
+        }
+
+        /* ============================================
+           Why Section
+           ============================================ */
+        .why-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.75rem;
+        }
+
+        .why-item {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .why-icon {
+            font-size: 2.75rem;
+            margin-bottom: 0.875rem;
+        }
+
+        .why-item h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 0.65rem;
+            color: var(--text-primary);
+        }
+
+        .why-item p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ============================================
+           CTA Section
+           ============================================ */
+        .cta {
+            background-color: var(--bg-secondary);
+            text-align: center;
+        }
+
+        .cta-content h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .cta-content p {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.75rem;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        /* ============================================
+           Footer
+           ============================================ */
+        .footer {
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 2.5rem 0 1.75rem;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 2.5rem;
+            margin-bottom: 1.75rem;
+        }
+
+        .footer-brand {
+            display: flex;
+            flex-direction: column;
+            gap: 0.875rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .brand .brand-icon {
+            width: 36px;
+            height: 36px;
+        }
+
+        .brand .brand-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .footer-tagline {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .footer-links {
+            display: contents;
+        }
+
+        .footer-column h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .footer-column a {
+            display: block;
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: 0.45rem;
+            font-size: 0.9rem;
+            transition: color 0.2s ease;
+        }
+
+        .footer-column a:hover {
+            color: var(--accent-primary);
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 1.75rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-tertiary);
+            font-size: 0.85rem;
+        }
+
+        .footer-bottom p {
+            margin: 0.2rem 0;
+        }
+
+        .footer-bottom a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .footer-bottom a:hover {
+            color: var(--accent-primary);
+        }
+
+        /* ============================================
+           Responsive Design
+           ============================================ */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+
+            section {
+                padding: 2.5rem 0;
+            }
+
+            .hero {
+                padding: 3rem 0 2rem;
+            }
+
+            .hero-title {
+                font-size: 1.85rem;
+            }
+
+            .hero-subtitle {
+                font-size: 0.95rem;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .hero-stats {
+                gap: 1.75rem;
+                flex-wrap: wrap;
+            }
+
+            .nav-brand {
+                font-size: 1.25rem;
+            }
+
+            .brand-icon {
+                width: 30px;
+                height: 30px;
+            }
+
+            /* Hamburger menu for mobile */
+            .hamburger {
+                display: block;
+            }
+
+            .nav-links {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                background-color: var(--bg-primary);
+                border-bottom: 1px solid var(--border-color);
+                padding: 1rem;
+                gap: 0.5rem;
+                display: none;
+                box-shadow: var(--shadow);
+            }
+
+            .nav-links.active {
+                display: flex;
+            }
+
+            .nav-links a {
+                padding: 0.75rem 1rem;
+                width: 100%;
+                text-align: left;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .install-card {
+                padding: 1rem;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header h2 {
+                font-size: 1.85rem;
+            }
+
+            .code-block pre {
+                font-size: 0.8rem;
+                padding: 1rem;
+            }
+
+            .tab-buttons {
+                flex-wrap: nowrap;
+            }
+
+            .brand {
+                font-size: 1.25rem;
+            }
+
+            .brand .brand-icon {
+                width: 30px;
+                height: 30px;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
-            <div class="nav-brand">
-                <span class="brand-icon">📊</span>
-                <span class="brand-name">incerto</span>
-            </div>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#installation">Installation</a>
-                <a href="#examples">Examples</a>
-                <a href="/docs/">Docs</a>
-                <a href="https://github.com/steverab/incerto" target="_blank">GitHub</a>
+            <div class="nav-content">
+                <a href="#" class="nav-brand">
+                    <div class="brand-icon">
+                        <img src="img/incerto_icon.svg" alt="incerto">
+                    </div>
+                    <span>incerto</span>
+                </a>
+                <div class="nav-right">
+                    <button class="hamburger" onclick="toggleMenu()" aria-label="Toggle menu">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                    <div class="nav-links" id="navLinks">
+                        <a href="#features">Features</a>
+                        <a href="#installation">Installation</a>
+                        <a href="#examples">Examples</a>
+                        <a href="/docs/">Docs</a>
+                        <a href="https://github.com/steverab/incerto" target="_blank">GitHub</a>
+                    </div>
+                    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                        <svg id="theme-icon-light" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
+                        </svg>
+                        <svg id="theme-icon-dark" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="display: none;">
+                            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
@@ -62,7 +928,7 @@
                 <div class="hero-cta">
                     <a href="#installation" class="btn btn-primary">Get Started</a>
                     <a href="https://github.com/steverab/incerto" class="btn btn-secondary" target="_blank">
-                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
                         </svg>
                         View on GitHub
@@ -70,21 +936,20 @@
                 </div>
                 <div class="hero-stats">
                     <div class="stat">
-                        <div class="stat-value">5</div>
+                        <div class="stat-value">8</div>
                         <div class="stat-label">Core Modules</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">50+</div>
+                        <div class="stat-value">60+</div>
                         <div class="stat-label">Methods</div>
                     </div>
                     <div class="stat">
-                        <div class="stat-value">190</div>
+                        <div class="stat-value">411</div>
                         <div class="stat-label">Tests</div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="hero-background"></div>
     </section>
 
     <!-- Features Section -->
@@ -98,7 +963,9 @@
             <div class="features-grid">
                 <!-- Feature 1: Calibration -->
                 <div class="feature-card">
-                    <div class="feature-icon">📊</div>
+                    <div class="feature-icon">
+                        <img src="img/calibration_icon.svg" alt="Calibration">
+                    </div>
                     <h3>Calibration</h3>
                     <p>Ensure your model's confidence matches its accuracy</p>
                     <ul class="feature-list">
@@ -110,7 +977,9 @@
 
                 <!-- Feature 2: OOD Detection -->
                 <div class="feature-card">
-                    <div class="feature-icon">🎲</div>
+                    <div class="feature-icon">
+                        <img src="img/ood_icon.svg" alt="OOD Detection">
+                    </div>
                     <h3>OOD Detection</h3>
                     <p>Identify when your model encounters unfamiliar data</p>
                     <ul class="feature-list">
@@ -122,7 +991,9 @@
 
                 <!-- Feature 3: Conformal Prediction -->
                 <div class="feature-card">
-                    <div class="feature-icon">🎯</div>
+                    <div class="feature-icon">
+                        <img src="img/conformal_icon.svg" alt="Conformal Prediction">
+                    </div>
                     <h3>Conformal Prediction</h3>
                     <p>Distribution-free uncertainty with coverage guarantees</p>
                     <ul class="feature-list">
@@ -134,7 +1005,9 @@
 
                 <!-- Feature 4: Selective Prediction -->
                 <div class="feature-card">
-                    <div class="feature-icon">🔍</div>
+                    <div class="feature-icon">
+                        <img src="img/sp_icon.svg" alt="Selective Prediction">
+                    </div>
                     <h3>Selective Prediction</h3>
                     <p>Abstain from predictions when uncertain</p>
                     <ul class="feature-list">
@@ -144,27 +1017,31 @@
                     </ul>
                 </div>
 
-                <!-- Feature 5: LLM Uncertainty -->
+                <!-- Feature 5: Distribution Shift -->
                 <div class="feature-card">
-                    <div class="feature-icon">🤖</div>
+                    <div class="feature-icon">
+                        <img src="img/shift_icon.svg" alt="Distribution Shift">
+                    </div>
+                    <h3>Distribution Shift</h3>
+                    <p>Detect and adapt to changing data distributions</p>
+                    <ul class="feature-list">
+                        <li>Statistical tests: MMD, Energy distance, KS test</li>
+                        <li>Classifier-based shift detection (BBSD)</li>
+                        <li>Label shift detection and importance weighting</li>
+                    </ul>
+                </div>
+
+                <!-- Feature 6: LLM Uncertainty -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <img src="img/llm_icon.svg" alt="LLM Uncertainty">
+                    </div>
                     <h3>LLM Uncertainty</h3>
                     <p>Quantify uncertainty in language model outputs</p>
                     <ul class="feature-list">
                         <li>Token-level: Entropy, perplexity, surprisal</li>
                         <li>Sequence-level: Probability, average log-prob</li>
                         <li>Sampling-based: Self-consistency, semantic entropy</li>
-                    </ul>
-                </div>
-
-                <!-- Feature 6: Data & Utils -->
-                <div class="feature-card">
-                    <div class="feature-icon">📦</div>
-                    <h3>Data & Utilities</h3>
-                    <p>Built-in datasets and helper functions</p>
-                    <ul class="feature-list">
-                        <li>Datasets: MNIST, CIFAR-10/100, SVHN</li>
-                        <li>OOD benchmarks with standard splits</li>
-                        <li>Visualization and common architectures</li>
                     </ul>
                 </div>
             </div>
@@ -181,23 +1058,31 @@
 
             <div class="install-cards">
                 <div class="install-card">
-                    <h3>From PyPI</h3>
+                    <h3>📦 From PyPI</h3>
                     <div class="code-block">
-                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                            <svg fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                            </svg>
+                        </button>
                         <pre><code class="language-bash">pip install incerto</code></pre>
                     </div>
-                    <p class="install-note">Coming soon to PyPI</p>
                 </div>
 
                 <div class="install-card">
-                    <h3>From Source</h3>
+                    <h3>🔧 From Source</h3>
                     <div class="code-block">
-                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                            <svg fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                            </svg>
+                        </button>
                         <pre><code class="language-bash">git clone https://github.com/steverab/incerto.git
 cd incerto
 pip install -e .</code></pre>
                     </div>
-                    <p class="install-note">Recommended for development</p>
                 </div>
             </div>
 
@@ -226,111 +1111,405 @@ pip install -e .</code></pre>
                     <button class="tab-btn active" onclick="showTab('calibration')">Calibration</button>
                     <button class="tab-btn" onclick="showTab('ood')">OOD Detection</button>
                     <button class="tab-btn" onclick="showTab('conformal')">Conformal Prediction</button>
-                    <button class="tab-btn" onclick="showTab('llm')">LLM Uncertainty</button>
+                    <button class="tab-btn" onclick="showTab('selective')">Selective Prediction</button>
+                    <button class="tab-btn" onclick="showTab('bayesian')">Bayesian Models</button>
+                    <button class="tab-btn" onclick="showTab('shift')">Shift Detection</button>
+                    <button class="tab-btn" onclick="showTab('llm')">LLM</button>
                 </div>
 
                 <div class="tab-content">
                     <!-- Calibration Example -->
                     <div id="calibration" class="tab-panel active">
+                        <p class="example-description">
+                            This example demonstrates post-hoc calibration using temperature scaling. We collect model predictions on a validation set, fit a temperature parameter to minimize negative log-likelihood, then use the calibrated model on test data to achieve better-aligned confidence scores.
+                        </p>
                         <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
                             <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
 from incerto.calibration import TemperatureScaling, ece_score
 
-# Train your model
-model = YourModel()
-# ... training code ...
+# Prepare validation and test data
+val_loader = DataLoader(val_dataset, batch_size=64)
+test_loader = DataLoader(test_dataset, batch_size=64)
 
-# Post-hoc calibration on validation set
+# Collect logits from validation set
+val_logits, val_labels = [], []
+with torch.no_grad():
+    for batch_x, batch_y in val_loader:
+        logits = model(batch_x)
+        val_logits.append(logits)
+        val_labels.append(batch_y)
+
+val_logits = torch.cat(val_logits)
+val_labels = torch.cat(val_labels)
+
+# Fit temperature scaling on validation set
 calibrator = TemperatureScaling()
 calibrator.fit(val_logits, val_labels)
 
-# Get calibrated predictions
-test_logits = model(test_data)
-calibrated_probs = calibrator.predict(test_logits).probs
+# Get calibrated predictions on test set
+test_logits, test_labels = [], []
+with torch.no_grad():
+    for batch_x, batch_y in test_loader:
+        logits = model(batch_x)
+        test_logits.append(logits)
+        test_labels.append(batch_y)
 
-# Evaluate calibration
-ece = ece_score(test_logits, test_labels)
+test_logits = torch.cat(test_logits)
+test_labels = torch.cat(test_labels)
+
+# Calibrate and evaluate
+calibrated_probs = calibrator.predict(test_logits).probs
+ece = ece_score(calibrated_probs, test_labels)
 print(f"Expected Calibration Error: {ece:.4f}")</code></pre>
                         </div>
                     </div>
 
                     <!-- OOD Example -->
                     <div id="ood" class="tab-panel">
+                        <p class="example-description">
+                            This example shows energy-based out-of-distribution detection. We compute energy scores for both in-distribution (e.g., CIFAR-10) and OOD (e.g., SVHN) data, then evaluate detection performance using AUROC to measure how well we can distinguish between the two distributions.
+                        </p>
                         <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                            <pre><code class="language-python">from incerto.ood import Energy
-from incerto.data import get_ood_benchmark
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
+from incerto.ood import Energy, auroc
 
-# Load OOD benchmark
-id_loader, ood_loader = get_ood_benchmark(
-    "CIFAR10_vs_SVHN", batch_size=128
-)
+# Load your trained model
+model.eval()
+
+# Prepare in-distribution and OOD datasets
+id_loader = DataLoader(cifar10_test, batch_size=100)
+ood_loader = DataLoader(svhn_test, batch_size=100)
 
 # Initialize Energy-based OOD detector
-detector = Energy(model)
+detector = Energy(model, temperature=1.0)
 
-# Compute OOD scores
-id_scores = detector.score(id_data)
-ood_scores = detector.score(ood_data)
+# Compute OOD scores for ID data
+id_scores = []
+for batch_x, _ in id_loader:
+    scores = detector.score(batch_x)
+    id_scores.append(scores)
+id_scores = torch.cat(id_scores)
+
+# Compute OOD scores for OOD data
+ood_scores = []
+for batch_x, _ in ood_loader:
+    scores = detector.score(batch_x)
+    ood_scores.append(scores)
+ood_scores = torch.cat(ood_scores)
 
 # Evaluate detection performance
-from incerto.ood import auroc
 auc = auroc(id_scores, ood_scores)
-print(f"AUROC: {auc:.4f}")</code></pre>
+print(f"OOD Detection AUROC: {auc:.4f}")
+
+# Decision threshold for deployment
+threshold = torch.quantile(id_scores, 0.95)
+print(f"95th percentile threshold: {threshold:.4f}")</code></pre>
                         </div>
                     </div>
 
                     <!-- Conformal Example -->
                     <div id="conformal" class="tab-panel">
+                        <p class="example-description">
+                            Adaptive Prediction Sets (APS) provides distribution-free coverage guarantees. We calibrate on held-out data to compute quantiles, then generate prediction sets that are guaranteed to contain the true label with probability 1-alpha, regardless of the underlying data distribution.
+                        </p>
                         <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                            <pre><code class="language-python">from incerto.conformal import inductive_conformal
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
+from incerto.conformal import aps
 
-# Calibrate on validation set
-alpha = 0.1  # Desired coverage: 1 - alpha = 90%
-predictor = inductive_conformal(
-    model, calibration_loader, alpha
-)
+# Load your trained classifier
+model.eval()
+
+# Prepare calibration and test data
+calibration_loader = DataLoader(cal_dataset, batch_size=64)
+test_loader = DataLoader(test_dataset, batch_size=64)
+
+# Create conformal predictor with 90% coverage guarantee
+alpha = 0.1  # 1 - alpha = 90% coverage
+predictor = aps(model, calibration_loader, alpha=alpha)
 
 # Generate prediction sets with coverage guarantees
-x_test = torch.randn(100, 3, 32, 32)
-prediction_sets = predictor(x_test)
+all_sets, all_labels = [], []
+for batch_x, batch_y in test_loader:
+    pred_sets = predictor(batch_x)
+    all_sets.append(pred_sets)
+    all_labels.append(batch_y)
 
-# Each prediction set is guaranteed to contain
-# the true label with probability ≥ 90%
-for i, pred_set in enumerate(prediction_sets):
-    print(f"Sample {i}: Predicted classes {pred_set}")</code></pre>
+# Evaluate coverage and efficiency
+coverage = 0
+avg_set_size = 0
+for sets, labels in zip(all_sets, all_labels):
+    coverage += (labels.unsqueeze(1) == sets).any(dim=1).float().mean()
+    avg_set_size += sets.size(1)
+
+coverage /= len(all_sets)
+avg_set_size /= len(all_sets)
+
+print(f"Coverage: {coverage:.3f} (target: {1-alpha:.3f})")
+print(f"Average set size: {avg_set_size:.2f}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Selective Prediction Example -->
+                    <div id="selective" class="tab-panel">
+                        <p class="example-description">
+                            Selective prediction enables models to abstain from low-confidence predictions, trading coverage for accuracy. This example shows confidence-based rejection where predictions below a threshold are flagged for human review, improving reliability in safety-critical applications.
+                        </p>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
+from incerto.sp import SoftmaxThreshold
+from incerto.sp.metrics import coverage, risk
+
+# Load your trained model
+model.eval()
+test_loader = DataLoader(test_dataset, batch_size=100)
+
+# Create selective predictor (wraps your model)
+predictor = SoftmaxThreshold(model)
+
+# Make predictions with confidence scores
+all_logits, all_confs, all_labels = [], [], []
+for batch_x, batch_y in test_loader:
+    logits, confs = predictor(batch_x, return_confidence=True)
+    all_logits.append(logits)
+    all_confs.append(confs)
+    all_labels.append(batch_y)
+
+logits = torch.cat(all_logits)
+confidences = torch.cat(all_confs)
+labels = torch.cat(all_labels)
+
+# Apply rejection threshold
+threshold = 0.8
+rejected = predictor.reject(confidences, threshold=threshold)
+accepted = ~rejected
+
+predictions = logits.argmax(dim=1)
+print(f"Rejected: {rejected.sum()}/{len(labels)} "
+      f"({rejected.float().mean()*100:.1f}%)")
+
+# Compute selective metrics
+if accepted.any():
+    selective_acc = (predictions[accepted] == labels[accepted]).float().mean()
+    print(f"Accuracy on accepted: {selective_acc*100:.2f}%")
+
+    cov = coverage(accepted)
+    risk_val = risk(predictions, labels, accepted)
+    print(f"Coverage: {cov:.3f}")
+    print(f"Selective risk: {risk_val:.4f}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Bayesian Example -->
+                    <div id="bayesian" class="tab-panel">
+                        <p class="example-description">
+                            Variational Bayesian Neural Networks learn distributions over weights using Bayes by Backprop. This example shows how to train with the variational loss (combining likelihood and KL divergence) and make predictions with epistemic and aleatoric uncertainty quantification.
+                        </p>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
+from incerto.bayesian import VariationalBayesNN
+
+# Prepare data
+train_loader = DataLoader(train_dataset, batch_size=64)
+test_loader = DataLoader(test_dataset, batch_size=100)
+
+# Create Variational Bayesian NN
+# Specify architecture: input_dim, [hidden_sizes], output_dim
+vbnn = VariationalBayesNN(
+    in_features=784,
+    hidden_sizes=[512, 256],
+    out_features=10,
+    prior_std=1.0
+)
+
+# Train with variational loss (likelihood + KL divergence)
+optimizer = torch.optim.Adam(vbnn.parameters(), lr=0.001)
+
+for epoch in range(10):
+    vbnn.train()
+    for batch_x, batch_y in train_loader:
+        optimizer.zero_grad()
+        # Variational loss with Monte Carlo sampling
+        loss = vbnn.variational_loss(batch_x, batch_y, num_samples=10)
+        loss.backward()
+        optimizer.step()
+
+# Inference with uncertainty quantification
+vbnn.eval()
+test_x, test_y = next(iter(test_loader))
+
+# Get predictions with variance estimates
+with torch.no_grad():
+    mean_pred, variance = vbnn.predict(test_x)
+
+print(f"Mean predictions shape: {mean_pred.shape}")
+print(f"Average predictive variance: {variance.mean():.4f}")
+
+# Identify high-uncertainty samples
+high_unc_mask = variance > variance.quantile(0.9)
+print(f"High uncertainty samples: {high_unc_mask.sum()}/{len(test_x)}")</code></pre>
+                        </div>
+                    </div>
+
+                    <!-- Shift Detection Example -->
+                    <div id="shift" class="tab-panel">
+                        <p class="example-description">
+                            Maximum Mean Discrepancy (MMD) detects distribution shift by comparing kernel embeddings between reference and production data. This example shows how to fit a detector on training data, monitor production batches, and set alert thresholds based on shift magnitude for timely model retraining.
+                        </p>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader
+from incerto.shift import MMDShiftDetector
+
+# Load reference (training) data
+reference_loader = DataLoader(train_dataset, batch_size=128)
+
+# Load production data (potentially shifted)
+production_loader = DataLoader(production_dataset, batch_size=128)
+
+# Create MMD shift detector with Gaussian kernel
+mmd_detector = MMDShiftDetector(sigma=1.0)
+
+# Fit on reference distribution
+mmd_detector.fit(reference_loader)
+
+# Compute shift score on production data
+shift_score = mmd_detector.score(production_loader)
+baseline_score = mmd_detector.score(reference_loader)  # Self-test
+
+# Calculate shift ratio
+shift_ratio = shift_score / (baseline_score + 1e-10)
+print(f"MMD shift score: {shift_score:.6f}")
+print(f"Shift ratio: {shift_ratio:.2f}x")
+
+# Alert based on shift magnitude
+if shift_ratio > 2.0:
+    print("⚠️  CRITICAL: Significant distribution shift detected!")
+    print("   Recommendation: Retrain model immediately")
+elif shift_ratio > 1.5:
+    print("⚠️  WARNING: Moderate shift detected")
+    print("   Recommendation: Monitor closely, consider retraining")
+else:
+    print("✓ No significant shift detected")
+
+# Save detector for production monitoring
+mmd_detector.save("mmd_detector.pt")
+
+# Production monitoring workflow
+print("\n=== Production Monitoring ===")
+print("1. Save detector for reuse")
+print("2. Set thresholds based on acceptable degradation")
+print("3. Monitor incoming batches periodically")
+print("4. Alert when shift_ratio > threshold")
+print("5. Retrain or adapt model when alerted")</code></pre>
                         </div>
                     </div>
 
                     <!-- LLM Example -->
                     <div id="llm" class="tab-panel">
+                        <p class="example-description">
+                            Semantic entropy clusters multiple LLM generations by meaning and computes entropy over semantic clusters rather than exact text matches. This captures true model uncertainty about the answer, identifying when the model produces diverse semantic interpretations that indicate genuine uncertainty.
+                        </p>
                         <div class="code-block">
-                            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-                            <pre><code class="language-python">from incerto.llm import (
-    TokenEntropy,
-    SelfConsistency,
-    SemanticEntropy
+                            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                                <svg fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                                    <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                                </svg>
+                            </button>
+                            <pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+from incerto.llm import SemanticEntropy, TokenEntropy
+
+# Load language model and embedding model
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+model.eval()
+
+# Example prompt
+prompt = "The capital of France is"
+inputs = tokenizer(prompt, return_tensors="pt")
+
+# --- Token-level uncertainty ---
+with torch.no_grad():
+    outputs = model(**inputs, return_dict=True)
+    logits = outputs.logits
+
+token_entropy = TokenEntropy.compute(logits)
+print(f"Average token entropy: {token_entropy.mean():.4f}")
+
+# --- Semantic Entropy: cluster semantically equivalent responses ---
+num_samples = 10
+responses = []
+for _ in range(num_samples):
+    output_ids = model.generate(
+        **inputs,
+        max_length=50,
+        do_sample=True,
+        temperature=0.8,
+        top_p=0.9,
+        num_return_sequences=1
+    )
+    response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    responses.append(response)
+
+# Compute semantic entropy with embedding model
+semantic_unc = SemanticEntropy.compute(
+    responses,
+    similarity_threshold=0.85,
+    embedding_model=embedding_model  # Pass model object, not string!
 )
 
-# Token-level uncertainty
-logits = model(input_ids)  # shape: (batch, seq_len, vocab)
-token_entropy = TokenEntropy.compute(logits)
+print(f"Semantic entropy: {semantic_unc['semantic_entropy']:.4f}")
+print(f"Number of semantic clusters: {semantic_unc['num_clusters']}")
 
-# Sampling-based uncertainty
-responses = [
-    model.generate(prompt, do_sample=True)
-    for _ in range(10)
-]
-
-# Self-consistency
-sc_result = SelfConsistency.compute(responses)
-print(f"Agreement rate: {sc_result['agreement_rate']:.2f}")
-
-# Semantic entropy
-se_result = SemanticEntropy.compute(responses)
-print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
+# High semantic entropy indicates uncertainty
+if semantic_unc['semantic_entropy'] > 1.5:
+    print("⚠️  High uncertainty: Model gives diverse semantic answers")
+else:
+    print("✓ Low uncertainty: Responses are semantically consistent")</code></pre>
                         </div>
                     </div>
                 </div>
@@ -367,7 +1546,7 @@ print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
                 <div class="why-item">
                     <div class="why-icon">✅</div>
                     <h3>Well Tested</h3>
-                    <p>190 tests ensuring reliability and correctness</p>
+                    <p>411 tests ensuring reliability and correctness</p>
                 </div>
 
                 <div class="why-item">
@@ -409,7 +1588,9 @@ print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
             <div class="footer-content">
                 <div class="footer-brand">
                     <div class="brand">
-                        <span class="brand-icon">📊</span>
+                        <div class="brand-icon">
+                            <img src="img/incerto_icon.svg" alt="incerto">
+                        </div>
                         <span class="brand-name">incerto</span>
                     </div>
                     <p class="footer-tagline">
@@ -418,55 +1599,113 @@ print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
                     </p>
                 </div>
 
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>Resources</h4>
-                        <a href="https://github.com/steverab/incerto" target="_blank">GitHub</a>
-                        <a href="/docs/">Documentation</a>
-                        <a href="https://github.com/steverab/incerto/tree/master/examples" target="_blank">Examples</a>
-                        <a href="https://github.com/steverab/incerto/blob/master/CHANGELOG.md" target="_blank">Changelog</a>
-                    </div>
+                <div class="footer-column">
+                    <h4>Resources</h4>
+                    <a href="https://github.com/steverab/incerto" target="_blank">GitHub</a>
+                    <a href="/docs/">Documentation</a>
+                    <a href="https://github.com/steverab/incerto/tree/master/examples" target="_blank">Examples</a>
+                    <a href="https://github.com/steverab/incerto/blob/master/CHANGELOG.md" target="_blank">Changelog</a>
+                </div>
 
-                    <div class="footer-column">
-                        <h4>Community</h4>
-                        <a href="https://github.com/steverab/incerto/issues" target="_blank">Issues</a>
-                        <a href="https://github.com/steverab/incerto/discussions" target="_blank">Discussions</a>
-                        <a href="https://github.com/steverab/incerto/blob/master/CONTRIBUTING.md" target="_blank">Contributing</a>
-                    </div>
+                <div class="footer-column">
+                    <h4>Community</h4>
+                    <a href="https://github.com/steverab/incerto/issues" target="_blank">Issues</a>
+                    <a href="https://github.com/steverab/incerto/discussions" target="_blank">Discussions</a>
+                    <a href="https://github.com/steverab/incerto/blob/master/CONTRIBUTING.md" target="_blank">Contributing</a>
                 </div>
             </div>
 
             <div class="footer-bottom">
                 <p>&copy; 2025 incerto. Released under the MIT License.</p>
-                <p>Created by <a href="https://github.com/steverab" target="_blank">Stephan Rabanser</a></p>
+                <p>Created by <a href="https://rabanser.dev" target="_blank">Stephan Rabanser</a></p>
             </div>
         </div>
     </footer>
 
     <!-- Scripts -->
     <script>
+        // Theme management
+        const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+        const currentTheme = localStorage.getItem('theme');
+
+        if (currentTheme === 'dark' || (!currentTheme && prefersDarkScheme.matches)) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            updateThemeIcon('dark');
+            updateHighlightTheme('dark');
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+            updateHighlightTheme(newTheme);
+
+            hljs.highlightAll();
+        }
+
+        function updateThemeIcon(theme) {
+            const lightIcon = document.getElementById('theme-icon-light');
+            const darkIcon = document.getElementById('theme-icon-dark');
+
+            if (theme === 'dark') {
+                lightIcon.style.display = 'none';
+                darkIcon.style.display = 'block';
+            } else {
+                lightIcon.style.display = 'block';
+                darkIcon.style.display = 'none';
+            }
+        }
+
+        function updateHighlightTheme(theme) {
+            const lightHighlight = document.getElementById('highlight-light');
+            const darkHighlight = document.getElementById('highlight-dark');
+
+            if (theme === 'dark') {
+                lightHighlight.disabled = true;
+                darkHighlight.disabled = false;
+            } else {
+                lightHighlight.disabled = false;
+                darkHighlight.disabled = true;
+            }
+        }
+
+        // Mobile menu toggle
+        function toggleMenu() {
+            const navLinks = document.getElementById('navLinks');
+            const hamburger = document.querySelector('.hamburger');
+            navLinks.classList.toggle('active');
+            hamburger.classList.toggle('active');
+        }
+
+        // Close mobile menu when clicking a link
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                const navLinks = document.getElementById('navLinks');
+                const hamburger = document.querySelector('.hamburger');
+                navLinks.classList.remove('active');
+                hamburger.classList.remove('active');
+            });
+        });
+
         // Initialize syntax highlighting
         hljs.highlightAll();
 
         // Tab switching
         function showTab(tabName) {
-            // Hide all panels
             document.querySelectorAll('.tab-panel').forEach(panel => {
                 panel.classList.remove('active');
             });
 
-            // Deactivate all buttons
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
 
-            // Show selected panel
             document.getElementById(tabName).classList.add('active');
-
-            // Activate clicked button
             event.target.classList.add('active');
 
-            // Re-highlight code
             hljs.highlightAll();
         }
 
@@ -476,9 +1715,12 @@ print(f"Semantic entropy: {se_result['semantic_entropy']:.4f}")</code></pre>
             const code = codeBlock.textContent;
 
             navigator.clipboard.writeText(code).then(() => {
-                button.textContent = 'Copied!';
+                const svg = button.querySelector('svg');
+                const originalSVG = svg.outerHTML;
+                svg.outerHTML = '<svg fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
+
                 setTimeout(() => {
-                    button.textContent = 'Copy';
+                    button.querySelector('svg').outerHTML = originalSVG;
                 }, 2000);
             });
         }
