@@ -17,6 +17,9 @@
 
 Latin *incerto* = "uncertain, doubtful, unsure".
 
+> [!WARNING]
+> This is an alpha release. The API may change without notice. Please report any issues on [GitHub](https://github.com/steverab/incerto/issues).
+
 ## 🎯 Key Features
 
 **incerto** provides a unified interface for:
@@ -31,7 +34,7 @@ Latin *incerto* = "uncertain, doubtful, unsure".
 - **Distance-based methods**: Mahalanobis distance, KNN
 - **Training methods**: Mixup, CutMix, Outlier Exposure, Energy regularization
 
-### <img src="website/img/conformal_icon.svg" width="24" height="24" align="center"> **Conformal Prediction**
+### <img src="website/img/conformal_icon.svg" width="40" height="40" align="center"> **Conformal Prediction**
 - **Classification**: Inductive CP, APS, RAPS, Mondrian CP
 - **Regression**: Jackknife+, CV+
 - Distribution-free uncertainty quantification with coverage guarantees
@@ -135,12 +138,12 @@ with torch.no_grad():
 test_logits = torch.cat(test_logits)
 test_labels = torch.cat(test_labels)
 
-# Get calibrated predictions
-calibrated = calibrator.predict(test_logits)
+# Get calibrated logits
+calibrated_logits = calibrator(test_logits)  # Applies temperature scaling
 
 # Measure calibration improvement
 ece_before = ece_score(test_logits, test_labels, n_bins=15)
-ece_after = ece_score(calibrated.logits, test_labels, n_bins=15)
+ece_after = ece_score(calibrated_logits, test_labels, n_bins=15)
 print(f"ECE before: {ece_before:.4f} | ECE after: {ece_after:.4f}")
 ```
 

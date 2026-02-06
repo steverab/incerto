@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv pip install --system sphinx sphinx-book-theme sphinx-autodoc-typehints sphinx-copybutton myst-parser
-          uv pip install --system -e .
+          uv pip install --system -e ".[all]"
 
       - name: Build Sphinx Documentation
         run: |
