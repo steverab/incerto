@@ -282,13 +282,35 @@ pip install -e .</code></pre>
                 </div>
             </div>
 
+            <div class="install-card" style="margin-bottom: 1.75rem;">
+                <h3>📎 Optional Extras</h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">
+                        <svg fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
+                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
+                        </svg>
+                    </button>
+                    <pre><code class="language-bash">pip install incerto[vision]   # + torchvision for vision datasets
+pip install incerto[llm]      # + transformers, accelerate, sentence-transformers
+pip install incerto[all]      # all optional dependencies</code></pre>
+                </div>
+            </div>
+
             <div class="requirements">
                 <h3>Requirements</h3>
                 <div class="req-badges">
                     <span class="badge">Python 3.10+</span>
-                    <span class="badge">PyTorch 2.1+</span>
+                    <span class="badge">PyTorch 2.0+</span>
                     <span class="badge">NumPy</span>
                     <span class="badge">scikit-learn</span>
+                    <span class="badge">SciPy</span>
+                </div>
+                <div class="req-badges" style="margin-top: 0.75rem;">
+                    <span class="badge" style="border-style: dashed;">torchvision <small>(vision)</small></span>
+                    <span class="badge" style="border-style: dashed;">transformers <small>(llm)</small></span>
+                    <span class="badge" style="border-style: dashed;">accelerate <small>(llm)</small></span>
+                    <span class="badge" style="border-style: dashed;">sentence-transformers <small>(llm)</small></span>
                 </div>
             </div>
         </div>
@@ -713,53 +735,6 @@ else:
         </div>
     </section>
 
-    <!-- Why incerto Section -->
-    <section class="why-incerto">
-        <div class="container">
-            <div class="section-header">
-                <h2>Why incerto?</h2>
-            </div>
-
-            <div class="why-grid">
-                <div class="why-item">
-                    <div class="why-icon">🎯</div>
-                    <h3>Unified API</h3>
-                    <p>Consistent interface across all uncertainty quantification methods</p>
-                </div>
-
-                <div class="why-item">
-                    <div class="why-icon">⚡</div>
-                    <h3>PyTorch Native</h3>
-                    <p>Built on PyTorch for seamless integration with your models</p>
-                </div>
-
-                <div class="why-item">
-                    <div class="why-icon">📚</div>
-                    <h3>Research-Backed</h3>
-                    <p>Implementations based on peer-reviewed publications</p>
-                </div>
-
-                <div class="why-item">
-                    <div class="why-icon">✅</div>
-                    <h3>Well Tested</h3>
-                    <p>900+ tests ensuring reliability and correctness</p>
-                </div>
-
-                <div class="why-item">
-                    <div class="why-icon">🚀</div>
-                    <h3>Easy to Use</h3>
-                    <p>Simple API that doesn't sacrifice functionality</p>
-                </div>
-
-                <div class="why-item">
-                    <div class="why-icon">📖</div>
-                    <h3>Open Source</h3>
-                    <p>MIT licensed, free for commercial and research use</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- CTA Section -->
     <section class="cta">
         <div class="container">
@@ -884,6 +859,22 @@ else:
                 navLinks.classList.remove('active');
                 hamburger.classList.remove('active');
             });
+        });
+
+        // Inline SVG icons so currentColor inherits CSS color
+        document.querySelectorAll('.brand-icon img, .feature-icon img').forEach(img => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', img.getAttribute('src'), true);
+            xhr.overrideMimeType('image/svg+xml');
+            xhr.onload = function() {
+                if (xhr.responseXML) {
+                    const svg = xhr.responseXML.documentElement.cloneNode(true);
+                    svg.setAttribute('width', '100%');
+                    svg.setAttribute('height', '100%');
+                    img.replaceWith(svg);
+                }
+            };
+            xhr.send();
         });
 
         // Initialize syntax highlighting

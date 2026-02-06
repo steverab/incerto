@@ -5,7 +5,7 @@ Requirements
 ------------
 
 - Python 3.10 or higher
-- PyTorch 2.1 or higher
+- PyTorch 2.0 or higher
 - NumPy
 - scikit-learn
 - scipy

@@ -52,6 +52,7 @@
 
 html {
     scroll-behavior: smooth;
+    scroll-padding-top: 3.5rem;
 }
 
 body {
@@ -103,7 +104,7 @@ body {
 }
 
 .nav-brand:hover {
-    opacity: 0.8;
+    color: var(--accent-primary);
 }
 
 .brand-icon {
@@ -221,10 +222,7 @@ body {
 }
 
 .gradient-text {
-    background: linear-gradient(135deg, var(--accent-primary) 0%, #8b5cf6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--accent-primary);
 }
 
 .hero-subtitle {
@@ -365,10 +363,16 @@ section {
     object-fit: contain;
 }
 
-/* Icon adjustments for dark mode */
-[data-theme="dark"] .feature-icon img,
-[data-theme="dark"] .brand-icon img {
-    filter: invert(1) hue-rotate(0deg) brightness(1) contrast(1);
+/* Icon color for dark mode (currentColor in inlined SVGs) */
+[data-theme="dark"] .feature-icon,
+[data-theme="dark"] .brand-icon {
+    color: #ffffff;
+}
+
+/* Fallback filter for when SVGs are still loaded as <img> */
+[data-theme="dark"] .feature-icon > img,
+[data-theme="dark"] .brand-icon > img {
+    filter: invert(1) hue-rotate(180deg) saturate(5);
 }
 
 .feature-card h3 {
