@@ -9,23 +9,21 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        python-version: ['3.10']
-        #os: [ubuntu-latest, macos-latest]
-        #python-version: ['3.10', '3.11', '3.12']
+    runs-on: ubuntu-latest
+    # strategy:
+    #   fail-fast: false
+    #   matrix:
+    #     os: [ubuntu-latest, macos-latest, windows-latest]
+    #     python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.10'
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
@@ -36,7 +34,7 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --all-groups
-        uv pip install -e .
+        uv pip install -e ".[all]"
 
     - name: Run tests
       run: |
@@ -59,21 +57,23 @@ jobs:
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+        cache-dependency-glob: "pyproject.toml"
 
     - name: Install dependencies
       run: |
         uv sync --all-groups
-        uv pip install -e .
-        uv pip install pytest-cov
+        uv pip install -e ".[all]"
 
     - name: Run tests with coverage
       run: |
         uv run pytest --cov=incerto --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
