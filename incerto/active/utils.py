@@ -5,7 +5,6 @@ Utility functions for active learning.
 from __future__ import annotations
 import logging
 import torch
-import numpy as np
 from typing import Tuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -229,7 +228,6 @@ def active_learning_loop(
     """
     if random_seed is not None:
         torch.manual_seed(random_seed)
-        np.random.seed(random_seed)
 
     # Initialize with random labeled samples
     n_total = len(x_pool)

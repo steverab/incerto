@@ -57,7 +57,7 @@ Latin *incerto* = "uncertain, doubtful, unsure".
 - **Statistical tests**: MMD, Energy distance, Kolmogorov-Smirnov
 - **Classifier-based**: Black-Box Shift Detection (BBSD)
 - **Label shift**: Detect and correct label distribution changes
-- **Importance weighting**: Covariate shift adaptation 
+- **Importance weighting**: Covariate shift adaptation
 
 ### <img src="website/img/llm_icon.svg" width="40" height="40" align="center"> **LLM Uncertainty**
 - **Token-level**: Entropy, confidence, perplexity, surprisal
@@ -390,14 +390,14 @@ The `examples/` directory contains Jupyter notebook tutorials covering all major
 
 | Notebook | Description |
 |----------|-------------|
-| `01_calibration.ipynb` | Post-hoc and training-time calibration methods |
-| `02_ood_detection.ipynb` | Out-of-distribution detection techniques |
-| `03_selective_prediction.ipynb` | Selective classification with reject option |
-| `04_conformal_prediction.ipynb` | Distribution-free prediction sets |
-| `05_bayesian_uncertainty.ipynb` | Bayesian neural networks and uncertainty |
-| `06_active_learning.ipynb` | Query strategies and acquisition functions |
-| `07_shift_detection.ipynb` | Distribution shift detection methods |
-| `08_llm_uncertainty.ipynb` | LLM uncertainty quantification |
+| [01_calibration.ipynb](examples/01_calibration.ipynb) | Post-hoc and training-time calibration methods |
+| [02_ood_detection.ipynb](examples/02_ood_detection.ipynb) | Out-of-distribution detection techniques |
+| [03_selective_prediction.ipynb](examples/03_selective_prediction.ipynb) | Selective classification with reject option |
+| [04_conformal_prediction.ipynb](examples/04_conformal_prediction.ipynb) | Distribution-free prediction sets |
+| [05_bayesian_uncertainty.ipynb](examples/05_bayesian_uncertainty.ipynb) | Bayesian neural networks and uncertainty |
+| [06_active_learning.ipynb](examples/06_active_learning.ipynb) | Query strategies and acquisition functions |
+| [07_shift_detection.ipynb](examples/07_shift_detection.ipynb) | Distribution shift detection methods |
+| [08_llm_uncertainty.ipynb](examples/08_llm_uncertainty.ipynb) | LLM uncertainty quantification |
 
 ## 🧪 Testing
 

@@ -36,6 +36,8 @@ from . import shift
 from . import sp
 from . import bayesian
 from . import active
+from . import data
+from . import utils
 
 __all__ = [
     "__version__",
@@ -56,4 +58,6 @@ __all__ = [
     "sp",
     "bayesian",
     "active",
+    "data",
+    "utils",
 ]

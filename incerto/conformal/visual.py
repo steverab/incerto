@@ -10,7 +10,9 @@ import torch
 from typing import Sequence
 
 
-def plot_coverage_vs_alpha(alphas: Sequence[float], coverages: Sequence[float]) -> None:
+def plot_coverage_vs_alpha(
+    alphas: Sequence[float], coverages: Sequence[float], show: bool = True
+) -> None:
     plt.figure()
     plt.plot(alphas, coverages, marker="o")
     plt.plot(alphas, [1 - a for a in alphas], linestyle="--")
@@ -18,10 +20,11 @@ def plot_coverage_vs_alpha(alphas: Sequence[float], coverages: Sequence[float]) 
     plt.ylabel("Empirical coverage")
     plt.title("Coverage vs desired level")
     plt.grid(True)
-    plt.show()
+    if show:
+        plt.show()
 
 
-def plot_set_size_hist(sets: Sequence[torch.Tensor]) -> None:
+def plot_set_size_hist(sets: Sequence[torch.Tensor], show: bool = True) -> None:
     sizes = [len(S) for S in sets]
     plt.figure()
     plt.hist(sizes, bins=range(1, max(sizes) + 2), align="left", rwidth=0.8)
@@ -29,4 +32,5 @@ def plot_set_size_hist(sets: Sequence[torch.Tensor]) -> None:
     plt.ylabel("Frequency")
     plt.title("Distribution of prediction-set sizes")
     plt.grid(axis="y")
-    plt.show()
+    if show:
+        plt.show()

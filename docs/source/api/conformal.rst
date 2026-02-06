@@ -49,3 +49,15 @@ Visualization
 
    plot_coverage_vs_alpha
    plot_set_size_hist
+
+Utilities
+---------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   ConformalPredictor
+   compute_quantile
+   prediction_set_from_scores
+   split_data

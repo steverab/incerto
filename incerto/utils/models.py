@@ -37,7 +37,7 @@ class ConvNet(nn.Module):
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, num_classes)
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         x = self.conv1(x)
         x = F.relu(x)
         x = self.conv2(x)
@@ -71,7 +71,7 @@ class BasicBlock(nn.Module):
                 nn.BatchNorm2d(out_channels),
             )
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
@@ -115,7 +115,7 @@ class ResNet18(nn.Module):
             layers.append(BasicBlock(out_channels, out_channels, 1))
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
         x = self.layer1(x)
         x = self.layer2(x)
@@ -166,7 +166,7 @@ class MLP(nn.Module):
 
         self.model = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         return self.model(x)
 
 

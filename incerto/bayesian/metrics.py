@@ -170,7 +170,6 @@ def brier_score(
     Returns:
         Brier score
     """
-    predictions.size(-1)
     one_hot = torch.zeros_like(predictions)
     one_hot[torch.arange(len(labels)), labels] = 1.0
 

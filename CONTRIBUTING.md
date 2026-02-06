@@ -20,8 +20,11 @@ We use [uv](https://github.com/astral-sh/uv) for package management:
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install incerto in development mode with dev dependencies
-uv pip install -e .
+# Install all dependencies (including dev tools)
+uv sync --all-groups
+
+# Install pre-commit hooks
+pre-commit install
 ```
 
 ### 3. Create a Branch

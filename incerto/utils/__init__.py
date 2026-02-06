@@ -8,8 +8,8 @@ This module provides:
 - Logging configuration
 """
 
-from .models import ConvNet, ResNet18, MLP
-from .training import train_epoch, evaluate, seed_everything
+from .models import ConvNet, ResNet18, MLP, BasicBlock
+from .training import train_epoch, evaluate, seed_everything, EarlyStopping
 from .visualization import (
     plot_training_curves,
     plot_uncertainty_distribution,
@@ -22,10 +22,12 @@ __all__ = [
     "ConvNet",
     "ResNet18",
     "MLP",
+    "BasicBlock",
     # Training
     "train_epoch",
     "evaluate",
     "seed_everything",
+    "EarlyStopping",
     # Visualization
     "plot_training_curves",
     "plot_uncertainty_distribution",

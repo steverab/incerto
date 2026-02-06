@@ -54,11 +54,9 @@ class TestTokenTemperatureScaling:
         logits = torch.randn(10, 5, 100)
         token_ids = torch.randint(0, 100, (10, 5))
 
-        initial_temp = scaler.temperature.item()
         scaler.fit(logits, token_ids, max_iters=10)
-        # Temperature should have changed (unless already optimal)
-        # Note: This test might be flaky for random data
-        assert scaler.temperature.item() != initial_temp or True  # Allow no change
+        # After fitting, temperature should still be a valid positive value
+        assert scaler.temperature.item() > 0
 
     def test_temperature_clamping(self):
         """Test temperature doesn't go to zero."""

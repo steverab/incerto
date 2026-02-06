@@ -63,7 +63,7 @@ Design Principles
     Implementations based on peer-reviewed publications with proper citations
 
 **Well-Tested**
-    509 tests ensuring correctness and reliability
+    900+ tests ensuring correctness and reliability
 
 **Modular**
     Use individual components or combine them for comprehensive uncertainty quantification

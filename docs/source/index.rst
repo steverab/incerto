@@ -133,6 +133,10 @@ Documentation Contents
    examples/calibration
    examples/ood
    examples/conformal
+   examples/selective
+   examples/bayesian
+   examples/active
+   examples/shift
    examples/llm
 
 .. toctree::

@@ -116,6 +116,8 @@ html_theme_options = {
     "show_toc_level": 2,
     "navigation_with_keys": True,
     "logo": {
+        "image_light": "_static/incerto_icon.svg",
+        "image_dark": "_static/incerto_icon_dark.svg",
         "text": "incerto",
         "alt_text": "incerto - Uncertainty Quantification for ML",
     },

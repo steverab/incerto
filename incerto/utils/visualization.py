@@ -4,10 +4,14 @@ Visualization utilities for examples.
 Common plotting functions to avoid duplication across examples.
 """
 
+import logging
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional, List
+
+logger = logging.getLogger(__name__)
 
 
 def plot_training_curves(
@@ -17,6 +21,7 @@ def plot_training_curves(
     val_accs: Optional[List[float]] = None,
     title: str = "Training Curves",
     save_path: Optional[str] = None,
+    show: bool = True,
 ):
     """
     Plot training and validation curves.
@@ -28,6 +33,7 @@ def plot_training_curves(
         val_accs: Validation accuracies per epoch (optional)
         title: Plot title
         save_path: Path to save figure (optional)
+        show: Whether to call plt.show() (default: True)
     """
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -59,9 +65,10 @@ def plot_training_curves(
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Saved plot to {save_path}")
+        logger.info("Saved plot to %s", save_path)
 
-    plt.show()
+    if show:
+        plt.show()
 
 
 def plot_uncertainty_distribution(
@@ -70,6 +77,7 @@ def plot_uncertainty_distribution(
     title: str = "Uncertainty Distribution",
     xlabel: str = "Uncertainty",
     save_path: Optional[str] = None,
+    show: bool = True,
 ):
     """
     Plot uncertainty distribution for correct vs incorrect predictions.
@@ -80,6 +88,7 @@ def plot_uncertainty_distribution(
         title: Plot title
         xlabel: X-axis label
         save_path: Path to save figure (optional)
+        show: Whether to call plt.show() (default: True)
     """
     uncertainties = uncertainties.detach().cpu().numpy()
     correct_mask = correct_mask.detach().cpu().numpy()
@@ -114,9 +123,10 @@ def plot_uncertainty_distribution(
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Saved plot to {save_path}")
+        logger.info("Saved plot to %s", save_path)
 
-    plt.show()
+    if show:
+        plt.show()
 
 
 def plot_2d_classification(
@@ -126,6 +136,7 @@ def plot_2d_classification(
     device: str = "cpu",
     title: str = "Classification",
     save_path: Optional[str] = None,
+    show: bool = True,
 ):
     """
     Plot 2D classification data and decision boundary.
@@ -137,6 +148,7 @@ def plot_2d_classification(
         device: Device for model inference
         title: Plot title
         save_path: Path to save figure (optional)
+        show: Whether to call plt.show() (default: True)
     """
     plt.figure(figsize=(10, 8))
 
@@ -170,9 +182,10 @@ def plot_2d_classification(
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"Saved plot to {save_path}")
+        logger.info("Saved plot to %s", save_path)
 
-    plt.show()
+    if show:
+        plt.show()
 
 
 __all__ = [

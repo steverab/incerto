@@ -299,7 +299,7 @@ class DeepEnsemble(BaseBayesianMethod):
         optimizer: torch.optim.Optimizer,
         criterion: nn.Module,
         num_epochs: int = 10,
-        device: str = "cuda",
+        device: str | None = None,
     ):
         """
         Train a specific ensemble member.
@@ -310,8 +310,10 @@ class DeepEnsemble(BaseBayesianMethod):
             optimizer: Optimizer instance
             criterion: Loss function
             num_epochs: Number of training epochs
-            device: Device to train on
+            device: Device to train on (default: auto-detect CUDA/CPU)
         """
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         model = self.models[model_idx].to(device)
         model.train()
 
@@ -460,6 +462,8 @@ class SWAG(BaseBayesianMethod):
             state_dict: State dictionary to load.
             strict: Whether to strictly enforce key matching.
         """
+        # Copy to avoid mutating caller's dict
+        state_dict = dict(state_dict)
         # Extract SWAG-specific state
         self.mean = state_dict.pop("_swag_mean", {})
         self.sq_mean = state_dict.pop("_swag_sq_mean", {})
@@ -573,18 +577,20 @@ class LaplaceApproximation(BaseBayesianMethod):
     def _compute_hessian_diag(
         self,
         data_loader: DataLoader,
-        device: str = "cuda",
+        device: str | None = None,
     ) -> dict:
         """
         Compute diagonal of the empirical Fisher (GGN approximation).
 
         Args:
             data_loader: Data loader for computing Hessian
-            device: Device to use
+            device: Device to use (default: auto-detect CUDA/CPU)
 
         Returns:
             Dictionary of Hessian diagonal per parameter
         """
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         hessian_diag = {}
 
         # Initialize
@@ -624,14 +630,16 @@ class LaplaceApproximation(BaseBayesianMethod):
 
         return hessian_diag
 
-    def fit(self, data_loader: DataLoader, device: str = "cuda"):
+    def fit(self, data_loader: DataLoader, device: str | None = None):
         """
         Fit Laplace approximation by computing Hessian.
 
         Args:
             data_loader: Data loader for computing Hessian
-            device: Device to use
+            device: Device to use (default: auto-detect CUDA/CPU)
         """
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         # Store MAP estimate (current weights)
         self.mean = {
             name: param.data.clone() for name, param in self.model.named_parameters()
@@ -725,6 +733,8 @@ class LaplaceApproximation(BaseBayesianMethod):
             state_dict: State dictionary to load.
             strict: Whether to strictly enforce key matching.
         """
+        # Copy to avoid mutating caller's dict
+        state_dict = dict(state_dict)
         # Extract Laplace-specific state
         self.mean = state_dict.pop("_laplace_mean", None)
         self.posterior_precision = state_dict.pop("_laplace_posterior_precision", None)

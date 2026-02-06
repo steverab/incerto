@@ -398,7 +398,7 @@ Reliability diagrams show calibration visually:
 
 .. code-block:: python
 
-   from incerto.utils.visualization import plot_reliability_diagram
+   from incerto.calibration import plot_reliability_diagram
    import matplotlib.pyplot as plt
 
    # Create reliability diagram

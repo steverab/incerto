@@ -114,8 +114,7 @@ def get_class_balanced_subset(
     else:
         raise ValueError("Dataset must have 'targets' or 'labels' attribute")
 
-    # Set random seed
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     # Sample from each class
     selected_indices = []
@@ -128,7 +127,7 @@ def get_class_balanced_subset(
                 f"but {samples_per_class} requested"
             )
 
-        sampled = np.random.choice(
+        sampled = rng.choice(
             class_indices,
             size=samples_per_class,
             replace=False,
@@ -213,7 +212,7 @@ def create_imbalanced_dataset(
     else:
         raise ValueError("Dataset must have 'targets' or 'labels' attribute")
 
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     unique_classes = np.unique(targets)
 
@@ -221,7 +220,7 @@ def create_imbalanced_dataset(
     if minority_classes is None:
         # Make half the classes minority
         n_minority = len(unique_classes) // 2
-        minority_classes = np.random.choice(
+        minority_classes = rng.choice(
             unique_classes,
             size=n_minority,
             replace=False,
@@ -246,7 +245,7 @@ def create_imbalanced_dataset(
         else:
             size = min(majority_size, len(class_indices))
 
-        sampled = np.random.choice(class_indices, size=size, replace=False)
+        sampled = rng.choice(class_indices, size=size, replace=False)
         selected_indices.extend(sampled.tolist())
 
     return Subset(dataset, selected_indices)
@@ -324,14 +323,14 @@ class LabelNoiseDataset(Dataset):
 
     def _generate_noisy_labels(self) -> np.ndarray:
         """Generate noisy labels."""
-        np.random.seed(self.seed)
+        rng = np.random.default_rng(self.seed)
 
         labels = self.original_labels.copy()
         n_samples = len(labels)
         n_noisy = int(n_samples * self.noise_rate)
 
         # Select samples to corrupt
-        noisy_indices = np.random.choice(n_samples, size=n_noisy, replace=False)
+        noisy_indices = rng.choice(n_samples, size=n_noisy, replace=False)
 
         # Corrupt labels (change to random different class)
         for idx in noisy_indices:
@@ -340,7 +339,7 @@ class LabelNoiseDataset(Dataset):
             possible_labels = [
                 i for i in range(self.num_classes) if i != original_label
             ]
-            labels[idx] = np.random.choice(possible_labels)
+            labels[idx] = rng.choice(possible_labels)
 
         return labels
 

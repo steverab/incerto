@@ -431,7 +431,7 @@ class TestSWAGSerialization:
         # Load into new model
         new_model = SimpleModel()
         new_swag = SWAG(new_model, num_samples=5)
-        new_swag.load_state_dict(torch.load(path, weights_only=False))
+        new_swag.load_state_dict(torch.load(path, weights_only=True))
 
         assert new_swag.n_models == 3
 
@@ -500,7 +500,7 @@ class TestLaplaceApproximationSerialization:
         # Load into new model
         new_model = SimpleModel()
         new_laplace = LaplaceApproximation(new_model, num_samples=5)
-        new_laplace.load_state_dict(torch.load(path, weights_only=False))
+        new_laplace.load_state_dict(torch.load(path, weights_only=True))
 
         assert new_laplace.mean is not None
         assert new_laplace.posterior_precision is not None
