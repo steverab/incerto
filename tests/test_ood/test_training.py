@@ -9,7 +9,6 @@ Correct API usage:
 - CutMix(alpha=1.0)(x, y) -> (mixed_x, y_a, y_b, lambda)
 """
 
-import pytest
 import torch
 import torch.nn as nn
 import numpy as np

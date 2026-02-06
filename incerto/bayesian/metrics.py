@@ -3,9 +3,12 @@ Metrics for evaluating Bayesian deep learning models.
 """
 
 from __future__ import annotations
+import math
 import torch
-import numpy as np
 from typing import Tuple
+
+from scipy.stats import spearmanr
+from sklearn.metrics import roc_auc_score
 
 
 def ensemble_diversity(
@@ -86,15 +89,18 @@ def uncertainty_quality(
     errors_np = errors.detach().cpu().numpy()
 
     # Rank correlation
-    from scipy.stats import spearmanr
-
     correlation, _ = spearmanr(uncertainties_np, errors_np)
 
-    # AUROC for using uncertainty to detect errors
-    from sklearn.metrics import roc_auc_score
+    # Handle NaN (occurs when one array is constant)
+    if math.isnan(correlation):
+        correlation = 0.0
 
+    # AUROC for using uncertainty to detect errors
     try:
         auroc = roc_auc_score(errors_np, uncertainties_np)
+        # sklearn returns NaN with a warning when only one class is present
+        if math.isnan(auroc):
+            auroc = 0.5
     except ValueError:
         # All errors are the same (all correct or all wrong)
         auroc = 0.5
@@ -164,7 +170,7 @@ def brier_score(
     Returns:
         Brier score
     """
-    num_classes = predictions.size(-1)
+    predictions.size(-1)
     one_hot = torch.zeros_like(predictions)
     one_hot[torch.arange(len(labels)), labels] = 1.0
 

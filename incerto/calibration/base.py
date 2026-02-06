@@ -10,6 +10,38 @@ import torch
 from torch.distributions import Categorical
 
 
+def _validate_logits(logits: torch.Tensor, context: str = "logits") -> None:
+    """Validate that logits are a 2D tensor."""
+    from ..exceptions import DataError
+
+    if not isinstance(logits, torch.Tensor):
+        raise DataError(
+            f"{context} must be a torch.Tensor, got {type(logits).__name__}"
+        )
+    if logits.dim() != 2:
+        raise DataError(
+            f"{context} must be 2D (n_samples, n_classes), got shape {tuple(logits.shape)}"
+        )
+
+
+def _validate_fit_inputs(logits: torch.Tensor, labels: torch.Tensor) -> None:
+    """Validate logits and labels for fit()."""
+    from ..exceptions import DataError
+
+    _validate_logits(logits)
+    if not isinstance(labels, torch.Tensor):
+        raise DataError(f"labels must be a torch.Tensor, got {type(labels).__name__}")
+    if labels.dim() != 1:
+        raise DataError(
+            f"labels must be 1D (n_samples,), got shape {tuple(labels.shape)}"
+        )
+    if logits.shape[0] != labels.shape[0]:
+        raise DataError(
+            f"logits and labels must have the same number of samples, "
+            f"got {logits.shape[0]} and {labels.shape[0]}"
+        )
+
+
 class BaseCalibrator(ABC):
     """
     Abstract base class for all calibration methods.
@@ -175,7 +207,7 @@ class BaseCalibrator(ABC):
         from ..exceptions import SerializationError
 
         try:
-            state = torch.load(path)
+            state = torch.load(path, weights_only=True)
             instance = cls()
             instance.load_state_dict(state)
             return instance

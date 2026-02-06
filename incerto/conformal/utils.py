@@ -4,7 +4,6 @@ Utility functions for conformal prediction methods.
 
 from __future__ import annotations
 import torch
-from typing import Callable
 
 
 def compute_quantile(
@@ -23,7 +22,7 @@ def compute_quantile(
     """
     n = len(scores)
     if adjusted:
-        level = (1.0 - alpha) * (1.0 + 1.0 / n)
+        level = min((1.0 - alpha) * (1.0 + 1.0 / n), 1.0)
     else:
         level = 1.0 - alpha
     return torch.quantile(scores, level).item()

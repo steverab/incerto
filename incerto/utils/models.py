@@ -142,12 +142,14 @@ class MLP(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dims: list[int] = [128, 64],
+        hidden_dims: list[int] | None = None,
         num_classes: int = 2,
         dropout_rate: float = 0.2,
         batch_norm: bool = True,
     ):
         super().__init__()
+        if hidden_dims is None:
+            hidden_dims = [128, 64]
 
         layers = []
         prev_dim = input_dim

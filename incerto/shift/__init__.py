@@ -29,6 +29,9 @@ from .metrics import (
 from .visual import (
     plot_feature_histograms,
     plot_embedding_space,
+    plot_confidence_distributions,
+    plot_shift_severity,
+    plot_ks_statistics,
 )
 
 __all__ = [
@@ -51,4 +54,7 @@ __all__ = [
     # Visual
     "plot_feature_histograms",
     "plot_embedding_space",
+    "plot_confidence_distributions",
+    "plot_shift_severity",
+    "plot_ks_statistics",
 ]

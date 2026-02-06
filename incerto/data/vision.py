@@ -8,8 +8,15 @@ uncertainty quantification research.
 from __future__ import annotations
 import torch
 from torch.utils.data import Dataset, Subset
-from torchvision import datasets, transforms
-from typing import Tuple, Optional, Callable
+
+try:
+    from torchvision import datasets, transforms
+except ImportError:
+    raise ImportError(
+        "torchvision is required for incerto.data.vision. "
+        "Install it with: pip install incerto[vision]"
+    )
+from typing import Tuple
 from pathlib import Path
 
 

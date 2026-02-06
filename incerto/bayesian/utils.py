@@ -4,7 +4,6 @@ Utility functions for Bayesian deep learning.
 
 from __future__ import annotations
 import torch
-import torch.nn.functional as F
 from typing import Tuple
 
 
@@ -176,7 +175,7 @@ def sample_from_posterior(
         num_samples: Number of samples to draw
 
     Returns:
-        Samples of shape (num_samples, *mean.shape)
+        Samples of shape ``(num_samples, *mean.shape)``
     """
     std = torch.sqrt(variance)
     samples = []
@@ -193,7 +192,7 @@ def ensemble_predictions_to_distribution(
     Convert ensemble predictions to mean and variance.
 
     Args:
-        predictions: Tensor of shape (num_models, batch_size, *)
+        predictions: Tensor of shape ``(num_models, batch_size, ...)``
 
     Returns:
         Tuple of (mean, variance)

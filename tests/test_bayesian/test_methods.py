@@ -220,10 +220,12 @@ class TestSWAG:
 
     def test_predict_without_collect(self, simple_model, simple_data):
         """Test that prediction fails without collecting models."""
+        from incerto.exceptions import NotFittedError
+
         x, y = simple_data
         swag = SWAG(simple_model)
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(NotFittedError):
             swag.predict(x[:10])
 
 
@@ -239,11 +241,85 @@ class TestLaplaceApproximation:
 
     def test_predict_without_fit(self, simple_model, simple_data):
         """Test that prediction fails without fitting."""
+        from incerto.exceptions import NotFittedError
+
         x, y = simple_data
         laplace = LaplaceApproximation(simple_model)
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(NotFittedError):
             laplace.predict(x[:10])
+
+    def test_fit_and_predict(self, simple_model, simple_data):
+        """Happy-path: fit on training data, then predict."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(
+            simple_model, likelihood="classification", num_samples=5
+        )
+        laplace.fit(loader, device="cpu")
+
+        # Posterior should be populated after fit
+        assert laplace.mean is not None
+        assert laplace.posterior_precision is not None
+
+        # Predict
+        x_test = x[:10]
+        mean, variance = laplace.predict(x_test)
+
+        assert mean.shape[0] == 10
+        assert variance.shape[0] == 10
+        assert torch.isfinite(mean).all()
+        assert torch.all(variance >= 0)
+
+    def test_fit_and_predict_with_samples(self, simple_model, simple_data):
+        """Test return_samples=True returns three tensors."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(
+            simple_model, likelihood="classification", num_samples=5
+        )
+        laplace.fit(loader, device="cpu")
+
+        x_test = x[:10]
+        mean, variance, samples = laplace.predict(x_test, return_samples=True)
+
+        assert mean.shape[0] == 10
+        assert variance.shape[0] == 10
+        assert samples.shape[0] == 5  # num_samples
+        assert samples.shape[1] == 10  # batch size
+
+    def test_fit_restores_original_params(self, simple_model, simple_data):
+        """Test that predict restores model weights after sampling."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(
+            simple_model, likelihood="classification", num_samples=3
+        )
+        laplace.fit(loader, device="cpu")
+
+        # Get original weights
+        original_weights = {
+            n: p.data.clone() for n, p in simple_model.named_parameters()
+        }
+
+        # Predict (internally samples different weights)
+        laplace.predict(x[:5])
+
+        # Verify weights restored
+        for name, param in simple_model.named_parameters():
+            assert torch.allclose(param.data, original_weights[name])
 
 
 class TestVariationalBayesNN:
@@ -286,11 +362,145 @@ class TestVariationalBayesNN:
 
     def test_predict(self):
         """Test prediction with uncertainty."""
-        model = VariationalBayesNN(10, [20], 3)
+        model = VariationalBayesNN(10, [20], 3, num_samples=10)
         x = torch.randn(5, 10)
 
-        mean, variance = model.predict(x, num_samples=10)
+        mean, variance = model.predict(x)
 
         assert mean.shape == (5, 3)
         assert variance.shape == (5, 3)
         assert torch.all(variance >= 0)
+
+
+class TestSWAGSerialization:
+    """Tests for SWAG serialization."""
+
+    def test_state_dict_contains_swag_state(self, simple_model):
+        """Test that state_dict includes SWAG-specific state."""
+        swag = SWAG(simple_model, num_samples=10)
+
+        # Collect some models
+        for _ in range(3):
+            swag.collect_model(simple_model)
+
+        state = swag.state_dict()
+
+        assert "_swag_mean" in state
+        assert "_swag_sq_mean" in state
+        assert "_swag_n_models" in state
+        assert state["_swag_n_models"] == 3
+
+    def test_load_state_dict_restores_swag_state(self, simple_model, simple_data):
+        """Test that load_state_dict restores SWAG state."""
+        x, y = simple_data
+        swag = SWAG(simple_model, num_samples=5)
+
+        # Collect some models and save state
+        for _ in range(3):
+            swag.collect_model(simple_model)
+
+        state = swag.state_dict()
+
+        # Create new SWAG and load state
+        new_model = SimpleModel()
+        new_swag = SWAG(new_model, num_samples=5)
+        new_swag.load_state_dict(state)
+
+        assert new_swag.n_models == 3
+        assert len(new_swag.mean) > 0
+
+        # Should be able to predict now
+        mean, variance = new_swag.predict(x[:5])
+        assert mean.shape[0] == 5
+
+    def test_serialization_roundtrip(self, simple_model, simple_data, tmp_path):
+        """Test full save/load cycle."""
+        x, y = simple_data
+        swag = SWAG(simple_model, num_samples=5)
+
+        for _ in range(3):
+            swag.collect_model(simple_model)
+
+        # Get prediction before saving
+        mean_before, _ = swag.predict(x[:5])
+
+        # Save to file
+        path = tmp_path / "swag.pt"
+        torch.save(swag.state_dict(), path)
+
+        # Load into new model
+        new_model = SimpleModel()
+        new_swag = SWAG(new_model, num_samples=5)
+        new_swag.load_state_dict(torch.load(path, weights_only=False))
+
+        assert new_swag.n_models == 3
+
+
+class TestLaplaceApproximationSerialization:
+    """Tests for LaplaceApproximation serialization."""
+
+    def test_state_dict_contains_laplace_state(self, simple_model, simple_data):
+        """Test that state_dict includes Laplace-specific state."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(simple_model, num_samples=5)
+        laplace.fit(loader, device="cpu")
+
+        state = laplace.state_dict()
+
+        assert "_laplace_mean" in state
+        assert "_laplace_posterior_precision" in state
+        assert "_laplace_likelihood" in state
+        assert state["_laplace_likelihood"] == "classification"
+
+    def test_load_state_dict_restores_laplace_state(self, simple_model, simple_data):
+        """Test that load_state_dict restores Laplace state."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(simple_model, num_samples=5)
+        laplace.fit(loader, device="cpu")
+
+        state = laplace.state_dict()
+
+        # Create new Laplace and load state
+        new_model = SimpleModel()
+        new_laplace = LaplaceApproximation(new_model, num_samples=5)
+        new_laplace.load_state_dict(state)
+
+        assert new_laplace.mean is not None
+        assert new_laplace.posterior_precision is not None
+
+        # Should be able to predict now
+        mean, variance = new_laplace.predict(x[:5])
+        assert mean.shape[0] == 5
+
+    def test_serialization_roundtrip(self, simple_model, simple_data, tmp_path):
+        """Test full save/load cycle."""
+        from torch.utils.data import TensorDataset, DataLoader
+
+        x, y = simple_data
+        dataset = TensorDataset(x, y)
+        loader = DataLoader(dataset, batch_size=32)
+
+        laplace = LaplaceApproximation(simple_model, num_samples=5)
+        laplace.fit(loader, device="cpu")
+
+        # Save to file
+        path = tmp_path / "laplace.pt"
+        torch.save(laplace.state_dict(), path)
+
+        # Load into new model
+        new_model = SimpleModel()
+        new_laplace = LaplaceApproximation(new_model, num_samples=5)
+        new_laplace.load_state_dict(torch.load(path, weights_only=False))
+
+        assert new_laplace.mean is not None
+        assert new_laplace.posterior_precision is not None

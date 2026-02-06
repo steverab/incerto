@@ -222,14 +222,12 @@ class HistogramBinning:
         if self.bin_boundaries is None:
             return confidence
 
-        # Find bin
-        bin_idx = None
-        for i in range(self.n_bins):
-            if self.bin_boundaries[i] <= confidence < self.bin_boundaries[i + 1]:
-                bin_idx = i
-                break
+        # Find bin using numpy digitize for consistency with fit()
+        import numpy as np
 
-        if bin_idx is None:
-            bin_idx = self.n_bins - 1
+        # np.digitize returns bin index where bin_boundaries[i-1] <= x < bin_boundaries[i]
+        # We subtract 1 to get 0-indexed bins, and clip to valid range
+        bin_idx = np.digitize(confidence, self.bin_boundaries) - 1
+        bin_idx = np.clip(bin_idx, 0, self.n_bins - 1)
 
         return float(self.bin_accuracies[bin_idx])

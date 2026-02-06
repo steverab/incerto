@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import tempfile
 import os
-from pathlib import Path
 
 from incerto.calibration import (
     TemperatureScaling,
@@ -20,7 +19,7 @@ from incerto.calibration import (
     PlattScalingCalibrator,
     IdentityCalibrator,
 )
-from incerto.ood import Energy, ODIN, Mahalanobis, KNN, MSP, MaxLogit
+from incerto.ood import Energy, ODIN, MSP, MaxLogit
 from incerto.shift import (
     MMDShiftDetector,
     EnergyShiftDetector,
@@ -101,7 +100,7 @@ class TestCalibratorSerialization:
             assert os.path.exists(path)
 
             loaded = TemperatureScaling()
-            loaded_state = torch.load(path)
+            loaded_state = torch.load(path, weights_only=True)
             loaded.load_state_dict(loaded_state)
             assert torch.allclose(calibrator.temperature, loaded.temperature)
 
@@ -117,6 +116,18 @@ class TestCalibratorSerialization:
         new_calibrator.load_state_dict(state)
         assert torch.allclose(calibrator.temperature, new_calibrator.temperature)
 
+    def test_vector_scaling_file_roundtrip(self, sample_logits, sample_labels):
+        """Test VectorScaling save/load via file with custom load()."""
+        calibrator = VectorScaling(n_classes=10)
+        calibrator.fit(sample_logits, sample_labels, max_iters=10)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "vec.pt")
+            calibrator.save(path)
+            loaded = VectorScaling.load(path)
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
+
     def test_matrix_scaling_serialization(self, sample_logits, sample_labels):
         """Test MatrixScaling save/load."""
         calibrator = MatrixScaling(n_classes=10)
@@ -131,15 +142,44 @@ class TestCalibratorSerialization:
         assert torch.allclose(calibrator.weight, new_calibrator.weight)
         assert torch.allclose(calibrator.bias, new_calibrator.bias)
 
+    def test_matrix_scaling_file_roundtrip(self, sample_logits, sample_labels):
+        """Test MatrixScaling save/load via file with custom load()."""
+        calibrator = MatrixScaling(n_classes=10)
+        calibrator.fit(sample_logits, sample_labels, max_iters=10)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "mat.pt")
+            calibrator.save(path)
+            loaded = MatrixScaling.load(path)
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
+
     def test_dirichlet_calibrator_serialization(self, sample_logits, sample_labels):
         """Test DirichletCalibrator save/load."""
-        calibrator = DirichletCalibrator(n_classes=10)
+        calibrator = DirichletCalibrator(n_classes=10, mu=0.01)
         calibrator.fit(sample_logits, sample_labels, max_iters=10)
 
         state = calibrator.state_dict()
+        assert "_mu" in state
+        assert state["_mu"] == 0.01
+
         new_calibrator = DirichletCalibrator(n_classes=10)
         new_calibrator.load_state_dict(state)
         assert torch.allclose(calibrator.weight, new_calibrator.weight)
+        assert new_calibrator.mu == 0.01
+
+    def test_dirichlet_file_roundtrip(self, sample_logits, sample_labels):
+        """Test DirichletCalibrator save/load via file preserves mu."""
+        calibrator = DirichletCalibrator(n_classes=10, mu=0.05)
+        calibrator.fit(sample_logits, sample_labels, max_iters=10)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "dirichlet.pt")
+            calibrator.save(path)
+            loaded = DirichletCalibrator.load(path)
+            assert loaded.mu == 0.05
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
 
     def test_isotonic_calibrator_serialization(self, sample_logits, sample_labels):
         """Test IsotonicRegressionCalibrator save/load."""
@@ -154,6 +194,18 @@ class TestCalibratorSerialization:
         new_calibrator.load_state_dict(state)
         assert new_calibrator.n_classes == calibrator.n_classes
 
+    def test_isotonic_file_roundtrip(self, sample_logits, sample_labels):
+        """Test IsotonicRegressionCalibrator file round-trip with weights_only."""
+        calibrator = IsotonicRegressionCalibrator()
+        calibrator.fit(sample_logits, sample_labels)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "isotonic.pt")
+            calibrator.save(path)
+            loaded = IsotonicRegressionCalibrator.load(path)
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
+
     def test_histogram_binning_serialization(self, sample_logits, sample_labels):
         """Test HistogramBinningCalibrator save/load."""
         calibrator = HistogramBinningCalibrator(n_bins=10)
@@ -166,6 +218,18 @@ class TestCalibratorSerialization:
         new_calibrator = HistogramBinningCalibrator(n_bins=10)
         new_calibrator.load_state_dict(state)
         assert new_calibrator.n_bins == calibrator.n_bins
+
+    def test_histogram_file_roundtrip(self, sample_logits, sample_labels):
+        """Test HistogramBinningCalibrator file round-trip with weights_only."""
+        calibrator = HistogramBinningCalibrator(n_bins=10)
+        calibrator.fit(sample_logits, sample_labels)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "histogram.pt")
+            calibrator.save(path)
+            loaded = HistogramBinningCalibrator.load(path)
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
 
     def test_platt_scaling_serialization(self, sample_logits, sample_labels):
         """Test PlattScalingCalibrator save/load."""
@@ -180,6 +244,18 @@ class TestCalibratorSerialization:
         new_calibrator.load_state_dict(state)
         assert new_calibrator.n_classes == calibrator.n_classes
 
+    def test_platt_file_roundtrip(self, sample_logits, sample_labels):
+        """Test PlattScalingCalibrator file round-trip with weights_only."""
+        calibrator = PlattScalingCalibrator()
+        calibrator.fit(sample_logits, sample_labels)
+        original_preds = calibrator.predict(sample_logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "platt.pt")
+            calibrator.save(path)
+            loaded = PlattScalingCalibrator.load(path)
+            assert torch.allclose(original_preds, loaded.predict(sample_logits).probs)
+
     def test_beta_calibrator_serialization(self):
         """Test BetaCalibrator save/load."""
         # Binary classification
@@ -190,11 +266,30 @@ class TestCalibratorSerialization:
         calibrator.fit(logits, labels)
 
         state = calibrator.state_dict()
-        assert "method" in state
+        assert "a" in state
+        assert "b" in state
+        assert "c" in state
 
         new_calibrator = BetaCalibrator()
         new_calibrator.load_state_dict(state)
-        assert new_calibrator.method == calibrator.method
+        assert new_calibrator.a == calibrator.a
+        assert new_calibrator.b == calibrator.b
+        assert new_calibrator.c == calibrator.c
+
+    def test_beta_file_roundtrip(self):
+        """Test BetaCalibrator file round-trip with weights_only."""
+        logits = torch.randn(100, 2)
+        labels = torch.randint(0, 2, (100,))
+
+        calibrator = BetaCalibrator()
+        calibrator.fit(logits, labels)
+        original_preds = calibrator.predict(logits).probs
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "beta.pt")
+            calibrator.save(path)
+            loaded = BetaCalibrator.load(path)
+            assert torch.allclose(original_preds, loaded.predict(logits).probs)
 
 
 # ============================================================================
@@ -215,7 +310,7 @@ class TestOODDetectorSerialization:
 
         new_detector = Energy(simple_model)
         new_detector.load_state_dict(state)
-        assert new_detector.T == 2.0
+        assert new_detector.temperature == 2.0
 
     def test_odin_serialization(self, simple_model):
         """Test ODIN detector save/load."""
@@ -227,8 +322,8 @@ class TestOODDetectorSerialization:
 
         new_detector = ODIN(simple_model)
         new_detector.load_state_dict(state)
-        assert new_detector.T == 1000.0
-        assert new_detector.eps == 0.002
+        assert new_detector.temperature == 1000.0
+        assert new_detector.epsilon == 0.002
 
     def test_msp_serialization(self, simple_model):
         """Test MSP detector (no state to save)."""
@@ -311,7 +406,7 @@ class TestShiftDetectorSerialization:
         detector.fit(shift_data_loader)
 
         state = detector.state_dict()
-        assert "clf" in state
+        assert "_reference" in state
 
         new_detector = ClassifierShiftDetector()
         new_detector.load_state_dict(state)

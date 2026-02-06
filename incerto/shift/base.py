@@ -65,7 +65,11 @@ class BaseShiftDetector(ABC):
             >>> detector = MyShiftDetector()
             >>> detector.fit(train_loader).score(test_loader)
         """
-        self._reference = torch.cat([x[0].detach() for x in reference_loader])
+        reference = torch.cat([x[0].detach() for x in reference_loader])
+        # Flatten to 2D if multi-dimensional (for image data)
+        if reference.ndim > 2:
+            reference = reference.flatten(1)
+        self._reference = reference
         return self
 
     @torch.no_grad()
@@ -90,11 +94,16 @@ class BaseShiftDetector(ABC):
             >>> print(f"Shift detected: {shift_score:.4f}")
         """
         if not hasattr(self, "_reference"):
-            raise AttributeError(
+            from ..exceptions import NotFittedError
+
+            raise NotFittedError(
                 "Detector has not been fitted. Call fit() before score()."
             )
 
         test_batch = torch.cat([x[0].detach() for x in test_loader])
+        # Flatten to 2D if multi-dimensional (for image data)
+        if test_batch.ndim > 2:
+            test_batch = test_batch.flatten(1)
         return self._compute(test_batch)
 
     @abstractmethod
@@ -189,7 +198,7 @@ class BaseShiftDetector(ABC):
         from ..exceptions import SerializationError
 
         try:
-            state = torch.load(path)
+            state = torch.load(path, weights_only=True)
             instance = cls()
             instance.load_state_dict(state)
             return instance

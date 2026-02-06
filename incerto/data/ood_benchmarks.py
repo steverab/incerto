@@ -7,9 +7,16 @@ used in uncertainty quantification research.
 
 from __future__ import annotations
 import torch
-from torch.utils.data import Dataset, Subset, ConcatDataset
-from torchvision import datasets, transforms
-from typing import Tuple, List, Optional
+from torch.utils.data import Dataset, Subset
+
+try:
+    from torchvision import datasets, transforms
+except ImportError:
+    raise ImportError(
+        "torchvision is required for incerto.data.ood_benchmarks. "
+        "Install it with: pip install incerto[vision]"
+    )
+from typing import Tuple, List
 from pathlib import Path
 import numpy as np
 
@@ -329,7 +336,8 @@ class CorruptedDataOOD(OODBenchmark):
             corruption_type: Type of corruption to apply
             severity: Corruption severity (0-1)
         """
-        super().__init__()
+        # CorruptedDataOOD does not need a root directory; skip OODBenchmark.__init__
+        self.root = None
         self.dataset = dataset
         self.corruption_type = corruption_type
         self.severity = severity
@@ -348,12 +356,16 @@ class CorruptedDataOOD(OODBenchmark):
             return corrupted
 
         elif self.corruption_type == "blur":
-            # Simple box blur
+            # Simple box blur via average pooling
             kernel_size = int(self.severity * 10) + 1
             if kernel_size % 2 == 0:
                 kernel_size += 1
-            # Simplified - in practice would use proper blur
-            return image
+            padding = kernel_size // 2
+            # (C, H, W) -> (1, C, H, W) for avg_pool2d
+            blurred = torch.nn.functional.avg_pool2d(
+                image.unsqueeze(0), kernel_size, stride=1, padding=padding
+            ).squeeze(0)
+            return blurred
 
         else:
             raise ValueError(f"Unknown corruption type: {self.corruption_type}")

@@ -85,9 +85,13 @@ def plot_confidence_vs_correctness(
         lower = bin_boundaries[i]
         upper = bin_boundaries[i + 1]
 
-        in_bin = (confidences > lower) & (confidences <= upper)
-        if i == n_bins - 1:
+        # Include lower boundary for first bin, upper boundary for last bin
+        if i == 0:
+            in_bin = (confidences >= lower) & (confidences < upper)
+        elif i == n_bins - 1:
             in_bin = (confidences >= lower) & (confidences <= upper)
+        else:
+            in_bin = (confidences >= lower) & (confidences < upper)
 
         if in_bin.sum() > 0:
             bin_centers.append((lower + upper) / 2)
@@ -237,7 +241,7 @@ def plot_risk_coverage_llm(
     coverage_normalized = coverage_points / len(sorted_correct)
 
     # Compute AURC
-    aurc = np.trapz(risk_curve, coverage_normalized)
+    aurc = np.trapezoid(risk_curve, coverage_normalized)
 
     # Plot
     ax.plot(coverage_normalized, risk_curve, linewidth=2, label=f"AURC={aurc:.4f}")

@@ -6,11 +6,10 @@ acquisition functions with diversity and batch considerations.
 """
 
 from __future__ import annotations
-from typing import List, Optional, Callable
+from typing import List, Optional
 import torch
 import torch.nn.functional as F
-import numpy as np
-from .acquisition import BaseAcquisition, EntropyAcquisition
+from .acquisition import BaseAcquisition
 
 
 class UncertaintySampling:
@@ -47,7 +46,7 @@ class UncertaintySampling:
 
         Args:
             model: Trained model
-            x_unlabeled: Unlabeled data (N, *)
+            x_unlabeled: Unlabeled data ``(N, ...)``
 
         Returns:
             Indices of selected samples (batch_size,)
@@ -152,9 +151,10 @@ class DiversitySampling:
                 best_idx = combined.argmax()
                 selected.append(available[best_idx].item())
 
-            # Update available indices
+            # Update available indices (use set for O(1) lookup)
+            selected_set = set(selected)
             available = torch.tensor(
-                [i for i in range(len(x_unlabeled)) if i not in selected],
+                [i for i in range(len(x_unlabeled)) if i not in selected_set],
                 device=x_unlabeled.device,
             )
 
@@ -263,46 +263,72 @@ class BadgeSampling:
     def __init__(self, batch_size: int = 100):
         self.batch_size = batch_size
 
+    @staticmethod
+    def _find_last_linear(model: torch.nn.Module) -> Optional[torch.nn.Linear]:
+        """Find the last nn.Linear layer in the model."""
+        last_linear = None
+        for module in model.modules():
+            if isinstance(module, torch.nn.Linear):
+                last_linear = module
+        return last_linear
+
     def _compute_gradient_embeddings(
         self,
         model: torch.nn.Module,
         x: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute gradient embeddings for samples."""
+        """
+        Compute gradient embeddings per the BADGE paper.
+
+        The gradient embedding for sample x is the gradient of the
+        cross-entropy loss (with hallucinated label y_hat = argmax)
+        w.r.t. the last linear layer's weight, which equals
+        ``(p - e_{y_hat}) outer h`` where p is the softmax output,
+        e_{y_hat} is one-hot of the predicted class, and h is the
+        penultimate-layer features.
+        """
+        was_training = model.training
         model.eval()
 
-        embeddings = []
-
-        for i in range(len(x)):
-            x_i = x[i : i + 1].requires_grad_(True)
-
-            # Forward pass
-            output = model(x_i)
-            probs = F.softmax(output, dim=-1)
-
-            # Compute gradients for each class
-            grad_embeds = []
-            for c in range(output.size(-1)):
-                if x_i.grad is not None:
-                    x_i.grad.zero_()
-
-                # Backprop for class c
-                probs[0, c].backward(retain_graph=True)
-
-                # Get gradient
-                if x_i.grad is not None:
-                    grad = x_i.grad.flatten().detach()
-                    grad_embeds.append(grad * probs[0, c].item())
-
-            # Concatenate gradients
-            embedding = (
-                torch.cat(grad_embeds)
-                if grad_embeds
-                else torch.zeros(1, device=x.device)
+        last_linear = self._find_last_linear(model)
+        if last_linear is None:
+            raise ValueError(
+                "BadgeSampling requires a model with at least one nn.Linear layer"
             )
-            embeddings.append(embedding)
 
-        return torch.stack(embeddings)
+        # Hook to capture the input to the last linear layer
+        captured_features = []
+
+        def hook_fn(module, input, output):
+            captured_features.append(input[0].detach())
+
+        handle = last_linear.register_forward_hook(hook_fn)
+
+        try:
+            embeddings = []
+            with torch.no_grad():
+                for i in range(len(x)):
+                    captured_features.clear()
+                    output = model(x[i : i + 1])
+                    probs = F.softmax(output, dim=-1)  # (1, C)
+
+                    h = captured_features[0]  # (1, D) penultimate features
+                    y_hat = probs.argmax(dim=-1)  # (1,)
+
+                    # One-hot of predicted class
+                    e_y = torch.zeros_like(probs)
+                    e_y[0, y_hat] = 1.0
+
+                    # Gradient embedding: (p - e_y) outer h, flattened
+                    diff = (probs - e_y).squeeze(0)  # (C,)
+                    h_flat = h.squeeze(0)  # (D,)
+                    embedding = torch.outer(diff, h_flat).flatten()  # (C*D,)
+                    embeddings.append(embedding)
+
+            return torch.stack(embeddings)
+        finally:
+            handle.remove()
+            model.train(was_training)
 
     def query(
         self,
@@ -344,9 +370,10 @@ class BadgeSampling:
             idx = available[torch.multinomial(probs, 1).item()].item()
             selected.append(idx)
 
-            # Update available
+            # Update available (use set for O(1) lookup)
+            selected_set = set(selected)
             available = torch.tensor(
-                [i for i in range(len(embeddings)) if i not in selected],
+                [i for i in range(len(embeddings)) if i not in selected_set],
                 device=x_unlabeled.device,
             )
 
@@ -381,22 +408,28 @@ class QueryByCommittee:
     @torch.no_grad()
     def query(
         self,
-        x_unlabeled: torch.Tensor,
+        model: Optional[torch.nn.Module] = None,
+        x_unlabeled: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> torch.Tensor:
         """
         Query using committee disagreement.
 
         Args:
+            model: Unused (committee members are provided at init).
+                   Accepted for interface compatibility with other strategies.
             x_unlabeled: Unlabeled data
 
         Returns:
             Indices of selected samples
         """
+        if x_unlabeled is None:
+            raise ValueError("x_unlabeled is required")
         # Collect predictions from all committee members
         predictions = []
-        for model in self.models:
-            model.eval()
-            logits = model(x_unlabeled)
+        for member in self.models:
+            member.eval()
+            logits = member(x_unlabeled)
             probs = F.softmax(logits, dim=-1)
             predictions.append(probs)
 

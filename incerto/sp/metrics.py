@@ -41,7 +41,7 @@ def aurc(
     risk_curve = cum_errors / torch.arange(1, n + 1, device=sorted_conf.device)
     coverage_curve = torch.arange(1, n + 1, device=sorted_conf.device) / n
     # simple trapezoidal rule
-    return torch.trapz(risk_curve, coverage_curve)
+    return torch.trapezoid(risk_curve, coverage_curve)
 
 
 def accuracy_coverage_curve(

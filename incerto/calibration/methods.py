@@ -6,7 +6,7 @@ from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from torch.distributions import Categorical
 
-from .base import BaseCalibrator
+from .base import BaseCalibrator, _validate_fit_inputs
 
 
 class IdentityCalibrator(BaseCalibrator):
@@ -15,6 +15,7 @@ class IdentityCalibrator(BaseCalibrator):
     """
 
     def fit(self, logits: torch.Tensor, labels: torch.Tensor):  # noqa: ARG002
+        _validate_fit_inputs(logits, labels)
         # No parameters to fit
         return self
 
@@ -60,6 +61,7 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
             lr: Learning rate for L-BFGS optimizer.
             max_iters: Maximum iterations for optimizer.
         """
+        _validate_fit_inputs(logits, labels)
         # Move to same device
         device = logits.device
         self.to(device)
@@ -70,7 +72,7 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
 
         def _eval():
             optimizer.zero_grad()
-            scaled = logits / self.temperature.clamp(min=1e-6)
+            scaled = logits / self.temperature.clamp(min=1e-4)
             loss = nll(scaled, labels)
             loss.backward()
             return loss
@@ -80,7 +82,7 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
         # used for direct scaling
-        return logits / self.temperature.clamp(min=1e-6)
+        return logits / self.temperature.clamp(min=1e-4)
 
     def predict(self, logits: torch.Tensor) -> Categorical:
         scaled = self.forward(logits)
@@ -103,6 +105,7 @@ class IsotonicRegressionCalibrator(BaseCalibrator):
         self.n_classes = 0
 
     def fit(self, logits: torch.Tensor, labels: torch.Tensor):
+        _validate_fit_inputs(logits, labels)
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         labels_np = labels.cpu().detach().numpy()
         n_samples, n_classes = probs.shape
@@ -116,6 +119,12 @@ class IsotonicRegressionCalibrator(BaseCalibrator):
         return self
 
     def predict(self, logits: torch.Tensor) -> Categorical:
+        from ..exceptions import NotFittedError
+
+        if not self.calibrators:
+            raise NotFittedError(
+                "IsotonicRegressionCalibrator has not been fitted. Call fit() first."
+            )
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         calibrated = np.zeros_like(probs)
 
@@ -124,28 +133,28 @@ class IsotonicRegressionCalibrator(BaseCalibrator):
 
         calibrated = torch.tensor(calibrated, device=logits.device, dtype=torch.float32)
         # re-normalize
-        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
+        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True).clamp(min=1e-10)
         return Categorical(probs=calibrated)
 
     def state_dict(self) -> dict:
         """Save isotonic regression calibrators."""
-        import pickle
+        from .._sklearn_io import serialize_isotonic
 
         return {
             "n_classes": self.n_classes,
             "out_of_bounds": self.out_of_bounds,
-            "calibrators": pickle.dumps(self.calibrators),
+            "calibrators": [serialize_isotonic(ir) for ir in self.calibrators],
         }
 
     def load_state_dict(self, state: dict) -> None:
         """Load isotonic regression calibrators."""
-        import pickle
+        from .._sklearn_io import deserialize_isotonic
         from ..exceptions import SerializationError
 
         try:
             self.n_classes = state["n_classes"]
             self.out_of_bounds = state["out_of_bounds"]
-            self.calibrators = pickle.loads(state["calibrators"])
+            self.calibrators = [deserialize_isotonic(d) for d in state["calibrators"]]
         except Exception as e:
             raise SerializationError(f"Failed to load state: {e}") from e
 
@@ -164,6 +173,7 @@ class HistogramBinningCalibrator(BaseCalibrator):
         self.bin_true_rates: list = []
 
     def fit(self, logits: torch.Tensor, labels: torch.Tensor):
+        _validate_fit_inputs(logits, labels)
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         labels_np = labels.cpu().detach().numpy()
         _, n_classes = probs.shape
@@ -174,6 +184,7 @@ class HistogramBinningCalibrator(BaseCalibrator):
             pk = probs[:, k]
             edges = np.linspace(0.0, 1.0, self.n_bins + 1)
             bin_ids = np.digitize(pk, edges, right=True) - 1
+            bin_ids = np.clip(bin_ids, 0, self.n_bins - 1)
             true_rates = np.zeros(self.n_bins)
 
             for b in range(self.n_bins):
@@ -188,6 +199,12 @@ class HistogramBinningCalibrator(BaseCalibrator):
         return self
 
     def predict(self, logits: torch.Tensor) -> Categorical:
+        from ..exceptions import NotFittedError
+
+        if not self.bin_edges:
+            raise NotFittedError(
+                "HistogramBinningCalibrator has not been fitted. Call fit() first."
+            )
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         n_samples, n_classes = probs.shape
         calibrated = np.zeros_like(probs)
@@ -201,15 +218,15 @@ class HistogramBinningCalibrator(BaseCalibrator):
             calibrated[:, k] = rates[bin_ids]
 
         calibrated = torch.tensor(calibrated, device=logits.device, dtype=torch.float32)
-        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
+        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True).clamp(min=1e-10)
         return Categorical(probs=calibrated)
 
     def state_dict(self) -> dict:
         """Save histogram binning state."""
         return {
             "n_bins": self.n_bins,
-            "bin_edges": self.bin_edges,
-            "bin_true_rates": self.bin_true_rates,
+            "bin_edges": [e.tolist() for e in self.bin_edges],
+            "bin_true_rates": [r.tolist() for r in self.bin_true_rates],
         }
 
     def load_state_dict(self, state: dict) -> None:
@@ -218,8 +235,8 @@ class HistogramBinningCalibrator(BaseCalibrator):
 
         try:
             self.n_bins = state["n_bins"]
-            self.bin_edges = state["bin_edges"]
-            self.bin_true_rates = state["bin_true_rates"]
+            self.bin_edges = [np.array(e) for e in state["bin_edges"]]
+            self.bin_true_rates = [np.array(r) for r in state["bin_true_rates"]]
         except Exception as e:
             raise SerializationError(f"Failed to load state: {e}") from e
 
@@ -240,6 +257,7 @@ class PlattScalingCalibrator(BaseCalibrator):
         self.n_classes: int = 0
 
     def fit(self, logits: torch.Tensor, labels: torch.Tensor):
+        _validate_fit_inputs(logits, labels)
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         labels_np = labels.cpu().detach().numpy()
         _, n_classes = probs.shape
@@ -253,6 +271,12 @@ class PlattScalingCalibrator(BaseCalibrator):
         return self
 
     def predict(self, logits: torch.Tensor) -> Categorical:
+        from ..exceptions import NotFittedError
+
+        if not self.models:
+            raise NotFittedError(
+                "PlattScalingCalibrator has not been fitted. Call fit() first."
+            )
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         calibrated = np.zeros_like(probs)
 
@@ -260,26 +284,26 @@ class PlattScalingCalibrator(BaseCalibrator):
             calibrated[:, k] = lr.predict_proba(probs[:, [k]])[:, 1]
 
         calibrated = torch.tensor(calibrated, device=logits.device, dtype=torch.float32)
-        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True)
+        calibrated = calibrated / calibrated.sum(dim=1, keepdim=True).clamp(min=1e-10)
         return Categorical(probs=calibrated)
 
     def state_dict(self) -> dict:
         """Save Platt scaling models."""
-        import pickle
+        from .._sklearn_io import serialize_logistic
 
         return {
             "n_classes": self.n_classes,
-            "models": pickle.dumps(self.models),
+            "models": [serialize_logistic(lr) for lr in self.models],
         }
 
     def load_state_dict(self, state: dict) -> None:
         """Load Platt scaling models."""
-        import pickle
+        from .._sklearn_io import deserialize_logistic
         from ..exceptions import SerializationError
 
         try:
             self.n_classes = state["n_classes"]
-            self.models = pickle.loads(state["models"])
+            self.models = [deserialize_logistic(d) for d in state["models"]]
         except Exception as e:
             raise SerializationError(f"Failed to load state: {e}") from e
 
@@ -315,6 +339,7 @@ class VectorScaling(nn.Module, BaseCalibrator):
             lr: Learning rate for L-BFGS optimizer.
             max_iters: Maximum iterations for optimizer.
         """
+        _validate_fit_inputs(logits, labels)
         device = logits.device
         self.to(device)
         labels = labels.to(device)
@@ -324,7 +349,7 @@ class VectorScaling(nn.Module, BaseCalibrator):
 
         def _eval():
             optimizer.zero_grad()
-            scaled = logits / self.temperature.clamp(min=1e-6)
+            scaled = logits / self.temperature.clamp(min=1e-4)
             loss = nll(scaled, labels)
             loss.backward()
             return loss
@@ -333,12 +358,26 @@ class VectorScaling(nn.Module, BaseCalibrator):
         return self
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
-        return logits / self.temperature.clamp(min=1e-6)
+        return logits / self.temperature.clamp(min=1e-4)
 
     def predict(self, logits: torch.Tensor) -> Categorical:
         scaled = self.forward(logits)
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
+
+    @classmethod
+    def load(cls, path: str) -> "VectorScaling":
+        """Load VectorScaling from a file."""
+        from ..exceptions import SerializationError
+
+        try:
+            state = torch.load(path, weights_only=True)
+            n_classes = state["temperature"].shape[0]
+            instance = cls(n_classes=n_classes)
+            instance.load_state_dict(state)
+            return instance
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         temps = self.temperature.detach().cpu().numpy()
@@ -374,6 +413,7 @@ class MatrixScaling(nn.Module, BaseCalibrator):
             lr: Learning rate for L-BFGS optimizer.
             max_iters: Maximum iterations for optimizer.
         """
+        _validate_fit_inputs(logits, labels)
         device = logits.device
         self.to(device)
         labels = labels.to(device)
@@ -401,6 +441,20 @@ class MatrixScaling(nn.Module, BaseCalibrator):
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
 
+    @classmethod
+    def load(cls, path: str) -> "MatrixScaling":
+        """Load MatrixScaling from a file."""
+        from ..exceptions import SerializationError
+
+        try:
+            state = torch.load(path, weights_only=True)
+            n_classes = state["weight"].shape[0]
+            instance = cls(n_classes=n_classes)
+            instance.load_state_dict(state)
+            return instance
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
+
     def __repr__(self) -> str:
         n_classes = self.weight.shape[0]
         return f"MatrixScaling(n_classes={n_classes})"
@@ -410,8 +464,9 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
     """
     Dirichlet Calibration (Kull et al., 2019).
 
-    Maps logits to Dirichlet distribution parameters using a linear
-    transformation, providing a more flexible calibration than temperature scaling.
+    Affine transformation of logits with optional L2 regularization toward
+    the identity matrix, inspired by the Dirichlet calibration framework.
+    More flexible than temperature scaling (generalizes MatrixScaling).
 
     Reference:
         Kull et al., "Beyond temperature scaling: Obtaining well-calibrated
@@ -447,12 +502,10 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
             lr: Learning rate
             max_iters: Maximum optimization iterations
         """
+        _validate_fit_inputs(logits, labels)
         device = logits.device
         self.to(device)
         labels = labels.to(device)
-
-        # Convert to one-hot
-        y_one_hot = F.one_hot(labels, self.n_classes).float()
 
         optimizer = torch.optim.LBFGS(
             [self.weight, self.bias], lr=lr, max_iter=max_iters
@@ -464,10 +517,7 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
             # Transform logits
             transformed = logits @ self.weight.T + self.bias
 
-            # Softmax to get Dirichlet mean
-            probs = F.softmax(transformed, dim=1)
-
-            # Dirichlet log-likelihood (simplified)
+            # Cross-entropy on affine-transformed logits
             loss = F.cross_entropy(transformed, labels)
 
             # Add regularization if specified
@@ -495,6 +545,33 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
         probs = F.softmax(transformed, dim=1)
         return Categorical(probs=probs)
 
+    def state_dict(self) -> dict:
+        """Return state dict including mu and nn.Module parameters."""
+        state = super().state_dict()
+        state["_mu"] = self.mu
+        return state
+
+    def load_state_dict(self, state: dict, **kwargs) -> None:
+        """Load state dict, restoring mu alongside nn.Module parameters."""
+        self.mu = state.get("_mu")
+        module_state = {k: v for k, v in state.items() if k != "_mu"}
+        super().load_state_dict(module_state, **kwargs)
+
+    @classmethod
+    def load(cls, path: str) -> "DirichletCalibrator":
+        """Load DirichletCalibrator from a file."""
+        from ..exceptions import SerializationError
+
+        try:
+            state = torch.load(path, weights_only=True)
+            n_classes = state["weight"].shape[0]
+            mu = state.get("_mu")
+            instance = cls(n_classes=n_classes, mu=mu)
+            instance.load_state_dict(state)
+            return instance
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
+
     def __repr__(self) -> str:
         mu_str = f"{self.mu:.4f}" if self.mu is not None else "None"
         return f"DirichletCalibrator(n_classes={self.n_classes}, mu={mu_str})"
@@ -504,22 +581,22 @@ class BetaCalibrator(BaseCalibrator):
     """
     Beta Calibration for binary classification (Kull et al., 2017).
 
-    Fits a Beta distribution to map uncalibrated probabilities to
-    calibrated probabilities. More flexible than Platt scaling.
+    Fits a three-parameter model: logit(q) = a*log(p) + b*log(1-p) + c,
+    where p is the uncalibrated probability and q is the calibrated probability.
+    This is equivalent to assuming the scores for each class follow Beta
+    distributions with different parameters.
 
     Reference:
         Kull et al., "Beta calibration: a well-founded and easily implemented
         improvement on logistic calibration" (AISTATS 2017)
-
-    Args:
-        method: Fitting method ('mle' or 'map')
     """
 
-    def __init__(self, method: str = "mle"):
-        self.method = method
-        self.a = None  # Beta parameter alpha
-        self.b = None  # Beta parameter beta
-        self.map_params = None  # Mapping parameters
+    def __init__(self):
+        self.a = None
+        self.b = None
+        self.c = None
+        self.is_binary = None
+        self._multiclass_calibrator = None
 
     def fit(self, logits: torch.Tensor, labels: torch.Tensor):
         """
@@ -530,89 +607,124 @@ class BetaCalibrator(BaseCalibrator):
             logits: Validation logits (N, 2) or (N, C) for multiclass
             labels: Binary labels (N,)
         """
+        _validate_fit_inputs(logits, labels)
         # Check if binary or multiclass
         if logits.dim() == 2 and logits.shape[1] > 2:
-            # Multiclass: fallback to isotonic regression
+            import warnings
+
+            warnings.warn(
+                "BetaCalibrator is designed for binary classification. "
+                f"Got {logits.shape[1]} classes — falling back to "
+                "IsotonicRegressionCalibrator. Use IsotonicRegressionCalibrator "
+                "directly for multiclass calibration.",
+                stacklevel=2,
+            )
             self.is_binary = False
-            self.calibrator = IsotonicRegressionCalibrator()
-            self.calibrator.fit(logits, labels)
+            self._multiclass_calibrator = IsotonicRegressionCalibrator()
+            self._multiclass_calibrator.fit(logits, labels)
             return self
 
         self.is_binary = True
 
         # Convert to probabilities
         if logits.dim() == 2:
-            # Multi-class format (binary)
             probs = F.softmax(logits, dim=1)[:, 1]
         else:
-            # Binary logits
             probs = torch.sigmoid(logits)
 
-        probs_np = probs.cpu().detach().numpy()
+        probs_np = probs.cpu().detach().numpy().astype(np.float64)
         labels_np = labels.cpu().detach().numpy()
 
-        # Fit using sklearn's calibration
-        from sklearn.isotonic import IsotonicRegression
+        # Clip to avoid log(0)
+        eps = 1e-12
+        probs_np = np.clip(probs_np, eps, 1.0 - eps)
 
-        # Use isotonic regression as a robust Beta approximation
-        self.calibrator = IsotonicRegression(out_of_bounds="clip")
-        self.calibrator.fit(probs_np, labels_np)
+        # Build Beta calibration features: [log(p), log(1-p)]
+        # Model: logit(q) = a*log(p) + b*log(1-p) + c
+        features = np.column_stack([np.log(probs_np), np.log(1.0 - probs_np)])
+
+        lr = LogisticRegression(solver="lbfgs", max_iter=1000, C=1e10)
+        lr.fit(features, labels_np)
+
+        self.a = float(lr.coef_[0, 0])
+        self.b = float(lr.coef_[0, 1])
+        self.c = float(lr.intercept_[0])
 
         return self
 
+    def _calibrate_probs(self, probs_np: np.ndarray) -> np.ndarray:
+        """Apply the fitted Beta calibration map to probabilities."""
+        eps = 1e-12
+        probs_np = np.clip(probs_np, eps, 1.0 - eps)
+        logit_q = self.a * np.log(probs_np) + self.b * np.log(1.0 - probs_np) + self.c
+        return 1.0 / (1.0 + np.exp(-logit_q))
+
     def predict(self, logits: torch.Tensor) -> Categorical:
         """Get calibrated predictions."""
+        from ..exceptions import NotFittedError
+
+        if self.is_binary is None:
+            raise NotFittedError(
+                "BetaCalibrator has not been fitted. Call fit() first."
+            )
+
         # Check if multiclass fallback
         if not self.is_binary:
-            return self.calibrator.predict(logits)
+            return self._multiclass_calibrator.predict(logits)
 
         # Binary classification
-        # Convert to probabilities
         if logits.dim() == 2:
             probs = F.softmax(logits, dim=1)[:, 1]
         else:
             probs = torch.sigmoid(logits)
 
-        probs_np = probs.cpu().detach().numpy()
+        probs_np = probs.cpu().detach().numpy().astype(np.float64)
+        calibrated_np = self._calibrate_probs(probs_np)
 
-        # Apply calibration
-        calibrated_probs = self.calibrator.predict(probs_np)
         calibrated_probs = torch.tensor(
-            calibrated_probs, device=logits.device, dtype=torch.float32
+            calibrated_np, device=logits.device, dtype=torch.float32
         )
-
-        # Stack for binary classification
         probs_both = torch.stack([1 - calibrated_probs, calibrated_probs], dim=1)
 
         return Categorical(probs=probs_both)
 
     def state_dict(self) -> dict:
         """Save Beta calibrator state."""
-        import pickle
+        is_binary = self.is_binary
+
+        if not is_binary and self._multiclass_calibrator is not None:
+            mc_state = self._multiclass_calibrator.state_dict()
+        else:
+            mc_state = None
 
         return {
-            "method": self.method,
             "a": self.a,
             "b": self.b,
-            "map_params": self.map_params,
-            "is_binary": getattr(self, "is_binary", None),
-            "calibrator": pickle.dumps(getattr(self, "calibrator", None)),
+            "c": self.c,
+            "is_binary": is_binary,
+            "multiclass_calibrator": mc_state,
         }
 
     def load_state_dict(self, state: dict) -> None:
         """Load Beta calibrator state."""
-        import pickle
         from ..exceptions import SerializationError
 
         try:
-            self.method = state["method"]
             self.a = state["a"]
             self.b = state["b"]
-            self.map_params = state["map_params"]
+            self.c = state["c"]
             self.is_binary = state["is_binary"]
-            self.calibrator = pickle.loads(state["calibrator"])
+
+            mc_state = state["multiclass_calibrator"]
+            if mc_state is not None:
+                self._multiclass_calibrator = IsotonicRegressionCalibrator()
+                self._multiclass_calibrator.load_state_dict(mc_state)
+            else:
+                self._multiclass_calibrator = None
         except Exception as e:
             raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
-        return f"BetaCalibrator(method='{self.method}')"
+        if self.a is not None:
+            return f"BetaCalibrator(a={self.a:.4f}, b={self.b:.4f}, c={self.c:.4f})"
+        return "BetaCalibrator()"

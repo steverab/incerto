@@ -25,9 +25,16 @@ from . import metrics
 #   Non-parametric two-sample tests
 # ------------------------------------------------------------------------- #
 class MMDShiftDetector(BaseShiftDetector):
-    r"""Kernel Maximum Mean Discrepancy (unbiased, Gaussian kernel).
+    r"""Kernel Maximum Mean Discrepancy with Gaussian (RBF) kernel.
 
-    * Gretton et al., 2012
+    Computes the biased MMD estimator which includes diagonal terms.
+    For large sample sizes, this converges to the true MMD.
+
+    Reference:
+        Gretton et al., "A Kernel Two-Sample Test" (JMLR 2012)
+
+    Args:
+        sigma: RBF kernel bandwidth parameter (default: 1.0)
     """
 
     def __init__(self, sigma: float = 1.0) -> None:
@@ -121,21 +128,25 @@ class ClassifierShiftDetector(BaseShiftDetector):
         return abs(proba.mean() - 0.5) * 2
 
     def state_dict(self) -> dict:
-        """Save classifier shift detector state."""
-        import pickle
+        """Save classifier shift detector state.
 
+        Note: The classifier itself is not serialized because it is
+        re-fitted on every call to score(). A fresh LogisticRegression
+        will be used after loading. Pass clf_factory again if you need
+        a different classifier.
+        """
         state = super().state_dict()
-        state["clf"] = pickle.dumps(self.clf)
         state["device"] = self.device
         return state
 
     def load_state_dict(self, state: dict) -> None:
         """Load classifier shift detector state."""
-        import pickle
+        from sklearn.linear_model import LogisticRegression
 
         super().load_state_dict(state)
-        self.clf = pickle.loads(state["clf"])
-        self.device = state["device"]
+        self.device = state.get("device")
+        if not hasattr(self, "clf"):
+            self.clf = LogisticRegression(max_iter=1000)
 
     def __repr__(self) -> str:
         fitted = hasattr(self, "_reference")
@@ -182,9 +193,11 @@ class LabelShiftDetector:
             source_loader: Source domain data with labels
             validation_loader: Validation set from source domain
         """
-        import numpy as np
 
         model.eval()
+
+        # Detect model device
+        device = next(model.parameters()).device
 
         # Estimate source label distribution
         all_labels = []
@@ -200,8 +213,8 @@ class LabelShiftDetector:
 
         with torch.no_grad():
             for x, y in validation_loader:
-                outputs = model(x)
-                preds = outputs.argmax(dim=-1)
+                outputs = model(x.to(device))
+                preds = outputs.argmax(dim=-1).cpu()
 
                 for true_label in range(self.num_classes):
                     mask = y == true_label
@@ -236,12 +249,15 @@ class LabelShiftDetector:
 
         model.eval()
 
+        # Detect model device
+        device = next(model.parameters()).device
+
         # Get predictions on target data
         all_preds = []
         with torch.no_grad():
             for x, _ in target_loader:
-                outputs = model(x)
-                preds = outputs.argmax(dim=-1)
+                outputs = model(x.to(device))
+                preds = outputs.argmax(dim=-1).cpu()
                 all_preds.append(preds)
 
         all_preds = torch.cat(all_preds)
@@ -259,7 +275,7 @@ class LabelShiftDetector:
             target_dist = torch.clamp(target_dist, min=0)
             target_dist = target_dist / target_dist.sum()
 
-        except:
+        except Exception:
             # Fallback to least squares if matrix is singular
             target_dist = torch.linalg.lstsq(
                 self.confusion_matrix.T, pred_dist
@@ -348,7 +364,7 @@ class LabelShiftDetector:
 
         try:
             detector = cls(num_classes, calibrated)
-            state = torch.load(path)
+            state = torch.load(path, weights_only=True)
             detector.load_state_dict(state)
             return detector
         except Exception as e:
@@ -430,25 +446,30 @@ class ImportanceWeightingShift:
         n_s = len(X_s)
         n_t = len(X_t)
 
-        # Compute kernel matrices
+        # Compute kernel matrices with ridge regularization for stability
+        import numpy as np
+        from scipy.optimize import minimize
+
         K = rbf_kernel(X_s, X_s)
+        K += 1e-6 * np.eye(n_s)  # Ridge regularization
         kappa = rbf_kernel(X_s, X_t).mean(axis=1)
 
         # Solve QP problem (simplified)
         # min 0.5 * w^T K w - kappa^T w
         # s.t. w >= 0, mean(w) = 1
 
-        import numpy as np
-        from scipy.optimize import minimize
-
         def objective(w):
-            return 0.5 * w @ K @ w - kappa @ w + self.alpha * (w**2).sum()
+            w = np.clip(w, 0, None)
+            with np.errstate(invalid="ignore", over="ignore", divide="ignore"):
+                val = 0.5 * w @ K @ w - kappa @ w + self.alpha * (w**2).sum()
+            return float(np.nan_to_num(val, nan=1e10, posinf=1e10))
 
         def constraint(w):
             return w.mean() - 1
 
         constraints = {"type": "eq", "fun": constraint}
-        bounds = [(0, None) for _ in range(n_s)]
+        max_weight = 10.0 * n_s / n_t  # Upper bound to prevent explosion
+        bounds = [(0, max_weight) for _ in range(n_s)]
 
         result = minimize(
             objective,
@@ -487,6 +508,9 @@ class ImportanceWeightingShift:
             weights = probs / (1 - probs + 1e-10)
             weights = torch.tensor(weights, dtype=torch.float32)
 
+            # Clamp to prevent explosion when probs ≈ 1
+            weights = weights.clamp(max=100.0)
+
             # Normalize weights to sum to n
             weights = weights / weights.mean()
 
@@ -517,23 +541,38 @@ class ImportanceWeightingShift:
 
     def state_dict(self) -> dict:
         """Save importance weighting state."""
-        import pickle
+        from .._sklearn_io import serialize_logistic
+
+        if self.weights_model is None:
+            model_data = None
+        elif isinstance(self.weights_model, torch.Tensor):
+            model_data = {"_type": "tensor", "data": self.weights_model.tolist()}
+        else:
+            model_data = {"_type": "logistic", **serialize_logistic(self.weights_model)}
 
         return {
             "method": self.method,
             "alpha": self.alpha,
-            "weights_model": pickle.dumps(self.weights_model),
+            "weights_model": model_data,
         }
 
     def load_state_dict(self, state: dict) -> None:
         """Load importance weighting state."""
-        import pickle
+        from .._sklearn_io import deserialize_logistic
         from ..exceptions import SerializationError
 
         try:
             self.method = state["method"]
             self.alpha = state["alpha"]
-            self.weights_model = pickle.loads(state["weights_model"])
+            model_data = state["weights_model"]
+            if model_data is None:
+                self.weights_model = None
+            elif model_data.get("_type") == "tensor":
+                self.weights_model = torch.tensor(
+                    model_data["data"], dtype=torch.float32
+                )
+            else:
+                self.weights_model = deserialize_logistic(model_data)
         except Exception as e:
             raise SerializationError(f"Failed to load state: {e}") from e
 
@@ -555,7 +594,7 @@ class ImportanceWeightingShift:
 
         try:
             instance = cls(method, alpha)
-            state = torch.load(path)
+            state = torch.load(path, weights_only=True)
             instance.load_state_dict(state)
             return instance
         except Exception as e:

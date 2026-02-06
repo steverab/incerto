@@ -10,7 +10,6 @@ All OOD detectors:
 
 import pytest
 import torch
-import torch.nn as nn
 
 from incerto.ood import (
     MSP,
@@ -75,12 +74,12 @@ class TestEnergy:
         """Test detector can be initialized."""
         detector = Energy(ood_model, temperature=1.0)
         assert detector is not None
-        assert detector.T == 1.0
+        assert detector.temperature == 1.0
 
     def test_default_temperature(self, ood_model):
         """Test default temperature is 1.0."""
         detector = Energy(ood_model)
-        assert detector.T == 1.0
+        assert detector.temperature == 1.0
 
     def test_score_shape(self, ood_model, ood_id_inputs):
         """Test score has correct shape."""
@@ -117,14 +116,14 @@ class TestODIN:
         """Test detector can be initialized."""
         detector = ODIN(ood_model, temperature=1000.0, epsilon=0.0012)
         assert detector is not None
-        assert detector.T == 1000.0
-        assert detector.eps == 0.0012
+        assert detector.temperature == 1000.0
+        assert detector.epsilon == 0.0012
 
     def test_default_parameters(self, ood_model):
         """Test default parameters."""
         detector = ODIN(ood_model)
-        assert detector.T == 1000.0
-        assert detector.eps == 0.0014
+        assert detector.temperature == 1000.0
+        assert detector.epsilon == 0.0014
 
     def test_score_shape(self, ood_model, ood_id_inputs):
         """Test score has correct shape."""
@@ -297,9 +296,11 @@ class TestKNN:
 
     def test_score_requires_fit(self, ood_model, ood_id_inputs):
         """Test score raises error before fit."""
+        from incerto.exceptions import NotFittedError
+
         detector = KNN(ood_model, k=5, layer_name="penultimate")
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(NotFittedError):
             detector.score(ood_id_inputs)
 
     def test_different_k_values(self, ood_model, ood_id_loader, ood_id_inputs):
@@ -408,3 +409,90 @@ class TestEdgeCases:
             scores = detector.score(x)
             assert scores.shape == (batch_size,)
             assert torch.isfinite(scores).all()
+
+
+# Negative tests
+class TestNegativeCases:
+    """Test error handling for OOD detectors."""
+
+    def test_non_module_raises_typeerror(self):
+        """Passing non-Module should raise TypeError."""
+        with pytest.raises(TypeError, match="must be an nn.Module"):
+            MSP("not a model")
+
+    def test_mahalanobis_score_before_fit(self, ood_model, ood_id_inputs):
+        """Mahalanobis score before fit should raise NotFittedError."""
+        from incerto.exceptions import NotFittedError
+
+        detector = Mahalanobis(ood_model, layer_name="penultimate")
+        with pytest.raises(NotFittedError):
+            detector.score(ood_id_inputs)
+
+    def test_odin_score_inside_no_grad_raises(self, ood_model, ood_id_inputs):
+        """ODIN score inside torch.no_grad() should raise RuntimeError."""
+        detector = ODIN(ood_model, temperature=1000.0, epsilon=0.001)
+        with pytest.raises(RuntimeError, match="requires gradients"):
+            with torch.no_grad():
+                detector.score(ood_id_inputs)
+
+
+# Serialization tests
+class TestOODDetectorFileSerialization:
+    """Test save/load round-trip via file for OOD detectors."""
+
+    def test_mahalanobis_file_roundtrip(self, ood_model, ood_id_loader, tmp_path):
+        """Test Mahalanobis save/load via file."""
+        import copy
+
+        # Fit and save
+        detector = Mahalanobis(ood_model, layer_name="penultimate")
+        detector.fit(ood_id_loader)
+        path = tmp_path / "mahalanobis.pt"
+        detector.save(str(path))
+
+        # Load into new detector with fresh model
+        fresh_model = copy.deepcopy(ood_model)
+        loaded = Mahalanobis.load(str(path), fresh_model, layer_name="penultimate")
+
+        # Verify state restored
+        assert loaded.class_means is not None
+        assert loaded.precision is not None
+        assert torch.allclose(loaded.class_means, detector.class_means)
+        assert torch.allclose(loaded.precision, detector.precision)
+
+    def test_knn_file_roundtrip(self, ood_model, ood_id_loader, tmp_path):
+        """Test KNN save/load via file."""
+        import copy
+
+        # Fit and save
+        detector = KNN(ood_model, k=5, layer_name="penultimate")
+        detector.fit(ood_id_loader)
+        path = tmp_path / "knn.pt"
+        detector.save(str(path))
+
+        # Load into new detector with fresh model
+        fresh_model = copy.deepcopy(ood_model)
+        loaded = KNN.load(str(path), fresh_model, layer_name="penultimate")
+
+        # Verify state restored
+        assert loaded.train_features is not None
+        assert loaded.k == 5
+        assert torch.allclose(loaded.train_features, detector.train_features)
+
+    def test_mahalanobis_layer_name_persisted(self, ood_model, ood_id_loader, tmp_path):
+        """Test that layer_name is persisted in state dict."""
+        detector = Mahalanobis(ood_model, layer_name="penultimate")
+        detector.fit(ood_id_loader)
+
+        state = detector.state_dict()
+        assert "layer_name" in state
+        assert state["layer_name"] == "penultimate"
+
+    def test_knn_layer_name_persisted(self, ood_model, ood_id_loader, tmp_path):
+        """Test that layer_name is persisted in state dict."""
+        detector = KNN(ood_model, k=5, layer_name="penultimate")
+        detector.fit(ood_id_loader)
+
+        state = detector.state_dict()
+        assert "layer_name" in state
+        assert state["layer_name"] == "penultimate"

@@ -15,6 +15,9 @@ from incerto.calibration.metrics import (
     mce_score,
     classwise_ece,
     adaptive_ece_score,
+    smooth_ece,
+    _smece_at_sigma,
+    _find_sigma_star,
 )
 
 
@@ -402,3 +405,78 @@ class TestAdaptiveECE:
         # Values may differ due to different binning strategies
         assert isinstance(ece, float)
         assert isinstance(aece, float)
+
+
+class TestSmoothECE:
+    """Test Smooth Expected Calibration Error (Blasiok & Nakkiran, ICLR 2024)."""
+
+    def test_basic_functionality(self, multiclass_logits, multiclass_labels):
+        """Test smooth_ece returns a valid float."""
+        smece = smooth_ece(multiclass_logits, multiclass_labels)
+
+        assert isinstance(smece, float)
+        assert 0 <= smece <= 1
+        assert np.isfinite(smece)
+
+    def test_low_miscalibration(self):
+        """Test smooth_ece is moderate for roughly calibrated predictions."""
+        n = 1000
+        num_classes = 10
+
+        # Random logits — not perfectly calibrated, but not pathologically bad
+        logits = torch.randn(n, num_classes)
+        labels = torch.randint(0, num_classes, (n,))
+
+        smece = smooth_ece(logits, labels)
+
+        assert isinstance(smece, float)
+        assert 0 <= smece <= 1
+
+    def test_overconfident_predictions(self):
+        """Test smooth_ece is high for overconfident predictions."""
+        n = 1000
+        num_classes = 2
+
+        logits = torch.zeros(n, num_classes)
+        logits[:, 0] = 10.0  # Always predict class 0 with high confidence
+        labels = torch.randint(0, num_classes, (n,))  # Random labels
+
+        smece = smooth_ece(logits, labels)
+
+        assert isinstance(smece, float)
+        assert smece > 0.1  # Should have high smECE
+
+    def test_comparison_with_ece(self, multiclass_logits, multiclass_labels):
+        """Test smooth_ece alongside standard ECE — both valid."""
+        ece = ece_score(multiclass_logits, multiclass_labels, n_bins=10)
+        smece = smooth_ece(multiclass_logits, multiclass_labels)
+
+        assert 0 <= ece <= 1
+        assert 0 <= smece <= 1
+        assert isinstance(ece, float)
+        assert isinstance(smece, float)
+
+    def test_fixed_point_property(self, multiclass_logits, multiclass_labels):
+        """Test that sigma* satisfies the fixed-point condition smECE_{sigma*} = sigma*."""
+        probs = torch.nn.functional.softmax(multiclass_logits, dim=1).numpy()
+        confidences = np.max(probs, axis=1)
+        predictions = np.argmax(probs, axis=1)
+        accuracies = (predictions == multiclass_labels.numpy()).astype(float)
+
+        sigma_star = _find_sigma_star(confidences, accuracies)
+        smece_at_sigma_star = _smece_at_sigma(confidences, accuracies, sigma_star)
+
+        # Fixed point: smECE_{sigma*} should approximately equal sigma*
+        assert abs(smece_at_sigma_star - sigma_star) < 1e-4
+
+    def test_binary_classification(self):
+        """Test smooth_ece on binary classification."""
+        n = 200
+        logits = torch.randn(n, 2)
+        labels = torch.randint(0, 2, (n,))
+
+        smece = smooth_ece(logits, labels)
+
+        assert isinstance(smece, float)
+        assert 0 <= smece <= 1
+        assert np.isfinite(smece)

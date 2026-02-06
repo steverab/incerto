@@ -9,12 +9,90 @@ optimisers, schedulers, or training loops are defined here.
 """
 
 from __future__ import annotations
-from typing import Callable, Tuple, List
+from typing import Callable, Tuple, List, Union
 import torch
 import numpy as np
 
-# type alias
-Batch = Tuple[torch.Tensor, torch.Tensor]  # (inputs, labels)
+
+def _validate_alpha(alpha: float) -> None:
+    """Validate that alpha is in (0, 1)."""
+    if not (0.0 < alpha < 1.0):
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+
+
+class ConformalPredictor:
+    """Thin wrapper around a calibrated conformal predictor.
+
+    Provides a consistent object-oriented interface for both classification
+    (prediction sets) and regression (intervals) conformal methods.
+
+    Args:
+        predictor: Callable returned by a conformal method function.
+        method: Name of the conformal method used.
+        alpha: Miscoverage rate used during calibration.
+
+    Example:
+        >>> cp = ConformalPredictor.from_method(
+        ...     "raps", model=model, calib_loader=loader, alpha=0.1
+        ... )
+        >>> pred_sets = cp.predict(x_test)
+    """
+
+    def __init__(
+        self,
+        predictor: Callable,
+        method: str = "unknown",
+        alpha: float = 0.0,
+    ):
+        self._predictor = predictor
+        self.method = method
+        self.alpha = alpha
+
+    def predict(
+        self, x: torch.Tensor
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+        """Run the calibrated predictor on new inputs.
+
+        For classification: returns ``List[torch.Tensor]`` of prediction sets.
+        For regression: returns ``(lower, upper)`` interval bounds.
+        """
+        return self._predictor(x)
+
+    def __call__(
+        self, x: torch.Tensor
+    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+        return self.predict(x)
+
+    def __repr__(self) -> str:
+        return f"ConformalPredictor(method='{self.method}', alpha={self.alpha})"
+
+    @classmethod
+    def from_method(cls, method: str, **kwargs) -> "ConformalPredictor":
+        """Convenience factory that calls the named method and wraps the result.
+
+        Args:
+            method: One of ``'inductive_conformal'``, ``'mondrian_conformal'``,
+                    ``'aps'``, ``'raps'``, ``'jackknife_plus'``, ``'cv_plus'``,
+                    ``'conformalized_quantile_regression'``.
+            **kwargs: Arguments forwarded to the method function.
+
+        Returns:
+            A :class:`ConformalPredictor` wrapping the calibrated predictor.
+        """
+        methods = {
+            "inductive_conformal": inductive_conformal,
+            "mondrian_conformal": mondrian_conformal,
+            "aps": aps,
+            "raps": raps,
+            "jackknife_plus": jackknife_plus,
+            "cv_plus": cv_plus,
+            "conformalized_quantile_regression": conformalized_quantile_regression,
+        }
+        if method not in methods:
+            raise ValueError(f"Unknown method '{method}'. Choose from: {list(methods)}")
+        alpha = kwargs.get("alpha", 0.0)
+        predictor = methods[method](**kwargs)
+        return cls(predictor, method=method, alpha=alpha)
 
 
 @torch.no_grad()
@@ -30,6 +108,7 @@ def inductive_conformal(
     Returns a predictor f̂(x) that outputs a prediction set (classification) or
     interval (regression) for any new x.
     """
+    _validate_alpha(alpha)
     model.eval()
     scores = []
     for x, y in calib_loader:
@@ -37,12 +116,17 @@ def inductive_conformal(
         conf = torch.softmax(logits, dim=-1)
         # conformity score: 1 − probability assigned to the true class
         scores.append(1.0 - conf[torch.arange(len(y)), y])
-    qhat = torch.quantile(torch.cat(scores), 1.0 - alpha)
+    all_scores = torch.cat(scores)
+    n_calib = len(all_scores)
+    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
+    qhat = torch.quantile(all_scores, q_level)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
-        logits = model(x)
-        conf = torch.softmax(logits, dim=-1)
-        return [(conf_i >= 1.0 - qhat).nonzero().squeeze(-1) for conf_i in conf]
+        model.eval()
+        with torch.no_grad():
+            logits = model(x)
+            conf = torch.softmax(logits, dim=-1)
+            return [(conf_i >= 1.0 - qhat).nonzero().squeeze(-1) for conf_i in conf]
 
     return predictor
 
@@ -61,6 +145,7 @@ def mondrian_conformal(
     Allows per-class (or arbitrary partition) calibration to guarantee *conditional*
     coverage within each partition cell.
     """
+    _validate_alpha(alpha)
     if partition_fn is None:
         # default: partition by true label
         partition_fn = lambda x, y: y  # noqa: E731
@@ -74,16 +159,28 @@ def mondrian_conformal(
         for p, c, yy in zip(part, conf, y):
             scores = parts.setdefault(int(p), [])
             scores.append(1.0 - c[yy])
-    qhats = {k: torch.quantile(torch.tensor(v), 1.0 - alpha) for k, v in parts.items()}
+    qhats = {
+        k: torch.quantile(
+            torch.tensor(v),
+            min((1.0 - alpha) * (1 + 1.0 / len(v)), 1.0),
+        )
+        for k, v in parts.items()
+    }
+
+    # Conservative fallback for partitions unseen during calibration:
+    # qhat=1.0 means threshold 1−1=0, so every class is included.
+    _default_qhat = torch.tensor(1.0)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
-        logits = model(x)
-        conf = torch.softmax(logits, dim=-1)
-        part = partition_fn(x, logits.argmax(-1))
-        return [
-            (ci >= 1.0 - qhats[int(pi)]).nonzero().squeeze(-1)
-            for ci, pi in zip(conf, part)
-        ]
+        model.eval()
+        with torch.no_grad():
+            logits = model(x)
+            conf = torch.softmax(logits, dim=-1)
+            part = partition_fn(x, logits.argmax(-1))
+            return [
+                (ci >= 1.0 - qhats.get(int(pi), _default_qhat)).nonzero().squeeze(-1)
+                for ci, pi in zip(conf, part)
+            ]
 
     return predictor
 
@@ -101,6 +198,7 @@ def aps(
     Produces variable-sized sets by thresholding cumulative probability mass
     up to and including the true label, calibrated on held-out data.
     """
+    _validate_alpha(alpha)
     model.eval()
     scores = []
     for x, y in calib_loader:
@@ -114,17 +212,24 @@ def aps(
         # Score is cumulative probability up to and including true label
         scores.append(cumprobs[torch.arange(len(y)), ranks])
 
-    qhat = torch.quantile(torch.cat(scores), 1.0 - alpha)
+    all_scores = torch.cat(scores)
+    n_calib = len(all_scores)
+    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
+    qhat = torch.quantile(all_scores, q_level)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
-        logits = model(x)
-        probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True, dim=-1)
-        cumprobs = probs.cumsum(dim=-1)
-        # Include classes until cumulative probability exceeds threshold
-        return [
-            (idx_i[cumprobs_i <= qhat]).clone().detach()
-            for idx_i, cumprobs_i in zip(idx, cumprobs)
-        ]
+        model.eval()
+        with torch.no_grad():
+            logits = model(x)
+            probs, idx = torch.sort(
+                torch.softmax(logits, dim=-1), descending=True, dim=-1
+            )
+            cumprobs = probs.cumsum(dim=-1)
+            # Include classes until cumulative probability exceeds threshold
+            return [
+                (idx_i[cumprobs_i <= qhat]).clone().detach()
+                for idx_i, cumprobs_i in zip(idx, cumprobs)
+            ]
 
     return predictor
 
@@ -139,10 +244,11 @@ def raps(
 ) -> Callable[[torch.Tensor], List[torch.Tensor]]:
     """
     Regularized APS (RAPS)
-    — Tsesmelis et al., *ICML 2021*.
+    — Angelopoulos, Bates, Malik, and Jordan, *ICLR 2021*.
 
-    Adds ℓ₁ regularisation (λ) and minimum size constraint (k_reg) to APS.
+    Adds ℓ₁ regularisation (λ) beyond rank k_reg and minimum size constraint to APS.
     """
+    _validate_alpha(alpha)
     model.eval()
     # compute calibration scores following RAPS definition
     scores = []
@@ -150,28 +256,31 @@ def raps(
         logits = model(x)
         probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True)
         rank = (idx == y[:, None]).nonzero()[:, 1]
-        g = probs.cumsum(dim=-1) + lam * torch.arange(
-            1, probs.size(-1) + 1, device=probs.device
-        )
+        ranks = torch.arange(1, probs.size(-1) + 1, device=probs.device)
+        penalty = lam * torch.clamp(ranks - k_reg, min=0)
+        g = probs.cumsum(dim=-1) + penalty
         scores.append(g[torch.arange(len(y)), rank])
-    qhat = torch.quantile(
-        torch.cat(scores), (1.0 - alpha) * (1 + 1.0 / len(calib_loader.dataset))
-    )
+    all_scores = torch.cat(scores)
+    n_calib = len(all_scores)
+    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
+    qhat = torch.quantile(all_scores, q_level)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
-        logits = model(x)
-        probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True)
-        g = probs.cumsum(dim=-1) + lam * torch.arange(
-            1, probs.size(-1) + 1, device=probs.device
-        )
-        S = (g <= qhat).long()
-        # enforce minimum size k_reg
-        ks = torch.clamp(k_reg - S.sum(dim=-1), min=0)
-        mask_extra = (
-            torch.arange(probs.size(-1), device=probs.device)[None] < ks[:, None]
-        )
-        S = S | mask_extra
-        return [(idx_i[S_i == 1]).clone().detach() for idx_i, S_i in zip(idx, S)]
+        model.eval()
+        with torch.no_grad():
+            logits = model(x)
+            probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True)
+            ranks = torch.arange(1, probs.size(-1) + 1, device=probs.device)
+            penalty = lam * torch.clamp(ranks - k_reg, min=0)
+            g = probs.cumsum(dim=-1) + penalty
+            S = (g <= qhat).long()
+            # enforce minimum size k_reg
+            ks = torch.clamp(k_reg - S.sum(dim=-1), min=0)
+            mask_extra = (
+                torch.arange(probs.size(-1), device=probs.device)[None] < ks[:, None]
+            )
+            S = S | mask_extra
+            return [(idx_i[S_i == 1]).clone().detach() for idx_i, S_i in zip(idx, S)]
 
     return predictor
 
@@ -191,6 +300,7 @@ def jackknife_plus(
 
     model_fn: function that re-trains a model on a supplied dataset split.
     """
+    _validate_alpha(alpha)
     n = len(train_dataset)
     preds = torch.empty((n,))  # ŷ_i^(-i)
     for i in range(n):
@@ -201,11 +311,15 @@ def jackknife_plus(
         xi, yi = train_dataset[i]
         preds[i] = model(xi.unsqueeze(0)).squeeze().cpu()
     residuals = torch.abs(preds - torch.tensor([train_dataset[i][1] for i in range(n)]))
-    q = torch.quantile(residuals, 1.0 - alpha)
+    q_level = min((1.0 - alpha) * (1 + 1.0 / n), 1.0)
+    q = torch.quantile(residuals, q_level)
+
+    # Train full-data model once during calibration, not on every predict call
+    full_model = model_fn(train_dataset)
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        full_model = model_fn(train_dataset)
-        mu = full_model(x).squeeze()
+        with torch.no_grad():
+            mu = full_model(x).squeeze()
         return mu - q, mu + q
 
     return predictor
@@ -224,28 +338,38 @@ def cv_plus(
 
     Offers less pessimistic intervals than Jackknife+ while controlling coverage.
     """
+    _validate_alpha(alpha)
     # split indices
     n = len(train_dataset)
     idx = torch.randperm(n)
     fold_sizes = [(n + i) // folds for i in range(folds)]
-    intervals = []
+    all_residuals = []
+    offset = 0
     for k in range(folds):
-        val_idx = idx[sum(fold_sizes[:k]) : sum(fold_sizes[: k + 1])]
-        train_idx = [i for i in idx if i not in val_idx]
+        val_idx = idx[offset : offset + fold_sizes[k]]
+        offset += fold_sizes[k]
+        val_set = set(val_idx.tolist())
+        train_idx = [i for i in idx.tolist() if i not in val_set]
         model = model_fn(torch.utils.data.Subset(train_dataset, train_idx))
         Xk = torch.stack([train_dataset[i][0] for i in val_idx])
         yk = torch.tensor([train_dataset[i][1] for i in val_idx])
         preds = model(Xk).squeeze()
-        intervals.append((yk - preds, yk + preds))
-    lo, hi = torch.cat([lo for lo, _ in intervals]), torch.cat(
-        [hi for _, hi in intervals]
+        # Signed residuals: Y - Ŷ
+        all_residuals.append(yk - preds)
+
+    signed_residuals = torch.cat(all_residuals)
+    n_res = len(signed_residuals)
+    q_lo = torch.quantile(signed_residuals, alpha / 2)
+    q_hi = torch.quantile(
+        signed_residuals, min((1 - alpha / 2) * (1 + 1.0 / n_res), 1.0)
     )
-    q_lo, q_hi = torch.quantile(lo, alpha / 2), torch.quantile(hi, 1 - alpha / 2)
+
+    # Train full-data model once during calibration
+    full_model = model_fn(train_dataset)
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # train on full data
-        model = model_fn(train_dataset)
-        mu = model(x).squeeze()
+        with torch.no_grad():
+            mu = full_model(x).squeeze()
         return mu + q_lo, mu + q_hi
 
     return predictor
@@ -256,8 +380,6 @@ def conformalized_quantile_regression(
     quantile_model: torch.nn.Module,
     calib_loader: torch.utils.data.DataLoader,
     alpha: float,
-    q_low: float | None = None,
-    q_high: float | None = None,
 ) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
     """
     Conformalized Quantile Regression (CQR)
@@ -278,8 +400,6 @@ def conformalized_quantile_regression(
                        - [:, 1] is the upper quantile prediction
         calib_loader: DataLoader for calibration data
         alpha: Miscoverage rate (e.g., 0.1 for 90% coverage)
-        q_low: Lower quantile level (default: alpha/2)
-        q_high: Upper quantile level (default: 1 - alpha/2)
 
     Returns:
         predictor: Function mapping inputs to (lower, upper) prediction intervals
@@ -297,11 +417,7 @@ def conformalized_quantile_regression(
         ... )
         >>> lower, upper = predictor(test_x)
     """
-    if q_low is None:
-        q_low = alpha / 2
-    if q_high is None:
-        q_high = 1 - alpha / 2
-
+    _validate_alpha(alpha)
     quantile_model.eval()
     scores = []
 
@@ -333,26 +449,17 @@ def conformalized_quantile_regression(
     qhat = torch.quantile(all_scores, q_level)
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Predict conformalized intervals for new inputs.
-
-        Args:
-            x: Input tensor of shape (batch_size, ...)
-
-        Returns:
-            lower: Lower bound of prediction interval (batch_size,)
-            upper: Upper bound of prediction interval (batch_size,)
-        """
         quantile_model.eval()
-        preds = quantile_model(x)
+        with torch.no_grad():
+            preds = quantile_model(x)
 
-        if preds.dim() == 1:
-            preds = preds.unsqueeze(-1).repeat(1, 2)
+            if preds.dim() == 1:
+                preds = preds.unsqueeze(-1).repeat(1, 2)
 
-        # Adjust quantile predictions by calibrated correction
-        lower = preds[:, 0] - qhat
-        upper = preds[:, 1] + qhat
+            # Adjust quantile predictions by calibrated correction
+            lower = preds[:, 0] - qhat
+            upper = preds[:, 1] + qhat
 
-        return lower.squeeze(), upper.squeeze()
+            return lower.squeeze(), upper.squeeze()
 
     return predictor

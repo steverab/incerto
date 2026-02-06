@@ -3,9 +3,12 @@ Utility functions for active learning.
 """
 
 from __future__ import annotations
+import logging
 import torch
 import numpy as np
 from typing import Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def split_labeled_unlabeled(
@@ -18,7 +21,7 @@ def split_labeled_unlabeled(
     Split data into labeled and unlabeled sets.
 
     Args:
-        data: Full dataset (N, *)
+        data: Full dataset ``(N, ...)``
         labels: Labels for all data (N,), can have -1 for unlabeled
         labeled_indices: Indices of labeled samples
         unlabeled_indices: Indices of unlabeled samples
@@ -69,7 +72,9 @@ def compute_diversity_penalty(
         method: Diversity measure ('min_distance', 'mean_distance', 'determinant')
 
     Returns:
-        Diversity penalty (lower = more diverse)
+        Diversity score. For 'min_distance' and 'mean_distance', higher
+        values indicate more diversity.  For 'determinant', lower (more
+        negative) values indicate more diversity.
     """
     if len(selected) == 0:
         return torch.tensor(0.0, device=features.device)
@@ -107,7 +112,7 @@ def compute_diversity_penalty(
         try:
             det = torch.linalg.det(cov)
             return -torch.log(det + 1e-10)  # Negative log for penalty
-        except:
+        except Exception:
             return torch.tensor(0.0, device=features.device)
 
     else:
@@ -127,13 +132,14 @@ def greedy_k_center(
 
     Args:
         features: Feature representations (N, D)
-        k: Number of centers to select
+        k: Number of centers to select (clamped to N if larger)
         initial_centers: Optional initial centers
 
     Returns:
         Indices of selected centers
     """
     n = len(features)
+    k = min(k, n)  # Can't select more than available
     selected = []
 
     # Initialize with existing centers if provided
@@ -229,9 +235,8 @@ def active_learning_loop(
     n_total = len(x_pool)
     all_indices = torch.arange(n_total)
     labeled_indices = all_indices[torch.randperm(n_total)[:initial_labeled]]
-    unlabeled_indices = torch.tensor(
-        [i for i in range(n_total) if i not in labeled_indices]
-    )
+    unlabeled_mask = ~torch.isin(all_indices, labeled_indices)
+    unlabeled_indices = all_indices[unlabeled_mask]
 
     results = {
         "labeled_sizes": [],
@@ -240,7 +245,7 @@ def active_learning_loop(
     }
 
     for round_idx in range(num_rounds):
-        print(f"Round {round_idx + 1}/{num_rounds}")
+        logger.info("Round %d/%d", round_idx + 1, num_rounds)
 
         # Get current split
         x_train = x_pool[labeled_indices]
@@ -255,19 +260,20 @@ def active_learning_loop(
         if eval_fn is not None:
             accuracy = eval_fn(model)
             results["accuracies"].append(accuracy)
-            print(f"  Accuracy: {accuracy:.4f}")
+            logger.info("  Accuracy: %.4f", accuracy)
 
         results["labeled_sizes"].append(len(labeled_indices))
 
         # Query next batch
         if len(unlabeled_indices) == 0:
-            print("No more unlabeled samples")
+            logger.info("No more unlabeled samples")
             break
 
         query_indices = strategy.query(model, x_unlabeled)
 
-        # Map query indices back to pool indices
-        selected = unlabeled_indices[query_indices]
+        # Map query indices back to pool indices (ensure CPU for indexing)
+        query_indices_cpu = query_indices.cpu()
+        selected = unlabeled_indices[query_indices_cpu]
         results["selected_indices"].append(selected)
 
         # Update labeled/unlabeled sets

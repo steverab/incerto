@@ -1,46 +1,48 @@
-# incerto
+<div align="center">
+  <img src="website/img/incerto_icon.svg" alt="incerto" width="120">
+  <h1>incerto</h1>
+</div>
+
+<div align="center">
 
 [![Tests](https://github.com/steverab/incerto/actions/workflows/tests.yml/badge.svg)](https://github.com/steverab/incerto/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![codecov](https://codecov.io/gh/steverab/incerto/branch/master/graph/badge.svg)](https://codecov.io/gh/steverab/incerto)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+</div>
 
 **incerto** is a comprehensive Python library for **uncertainty quantification in machine learning**. It provides state-of-the-art methods for calibration, out-of-distribution detection, conformal prediction, selective prediction, and uncertainty estimation in deep learning and LLMs.
 
-Latin *incerto* = "uncertain, doubtful, unsure" - embracing uncertainty in ML predictions.
+Latin *incerto* = "uncertain, doubtful, unsure".
 
 ## 🎯 Key Features
 
 **incerto** provides a unified interface for:
 
-### 📊 **Calibration**
+### <img src="website/img/calibration_icon.svg" width="40" height="40" align="center"> **Calibration**
 - **Post-hoc calibration**: Temperature scaling, Platt scaling, isotonic regression, histogram binning
 - **Training-time methods**: Label smoothing, focal loss, confidence penalty, evidential deep learning
 - **Metrics**: ECE, MCE, Brier score, NLL, reliability diagrams
 
-### 🎲 **Out-of-Distribution (OOD) Detection**
+### <img src="website/img/ood_icon.svg" width="40" height="40" align="center"> **Out-of-Distribution (OOD) Detection**
 - **Score-based methods**: MSP, MaxLogit, Energy, ODIN
 - **Distance-based methods**: Mahalanobis distance, KNN
 - **Training methods**: Mixup, CutMix, Outlier Exposure, Energy regularization
 
-### 🎯 **Conformal Prediction**
+### <img src="website/img/conformal_icon.svg" width="24" height="24" align="center"> **Conformal Prediction**
 - **Classification**: Inductive CP, APS, RAPS, Mondrian CP
 - **Regression**: Jackknife+, CV+
 - Distribution-free uncertainty quantification with coverage guarantees
 
-### 🔍 **Selective Prediction**
+### <img src="website/img/sp_icon.svg" width="40" height="40" align="center"> **Selective Prediction**
 - Confidence thresholding (Softmax Threshold)
 - Self-Adaptive Training (SAT)
 - Deep Gambler, SelectiveNet
 - Risk-coverage tradeoffs
 
-### 🤖 **LLM Uncertainty**
-- **Token-level**: Entropy, confidence, perplexity, surprisal
-- **Sequence-level**: Sequence probability, average log-prob
-- **Sampling-based**: Self-consistency, semantic entropy, predictive entropy
-- **Generation methods**: Beam search uncertainty, nucleus sampling, contrastive decoding
-
-### 🎲 **Bayesian Deep Learning** ⭐ NEW
+### <img src="website/img/bayesian_icon.svg" width="40" height="40" align="center"> **Bayesian Deep Learning**
 - **MC Dropout**: Uncertainty via dropout at test time
 - **Deep Ensembles**: Train multiple models for robust predictions
 - **SWAG**: Stochastic Weight Averaging - Gaussian
@@ -48,19 +50,25 @@ Latin *incerto* = "uncertain, doubtful, unsure" - embracing uncertainty in ML pr
 - **Variational Inference**: Bayes by Backprop
 - **Uncertainty decomposition**: Separate epistemic & aleatoric uncertainty
 
-### 🎯 **Active Learning** ⭐ NEW
+### <img src="website/img/shift_icon.svg" width="40" height="40" align="center"> **Distribution Shift Detection**
+- **Statistical tests**: MMD, Energy distance, Kolmogorov-Smirnov
+- **Classifier-based**: Black-Box Shift Detection (BBSD)
+- **Label shift**: Detect and correct label distribution changes
+- **Importance weighting**: Covariate shift adaptation 
+
+### <img src="website/img/llm_icon.svg" width="40" height="40" align="center"> **LLM Uncertainty**
+- **Token-level**: Entropy, confidence, perplexity, surprisal
+- **Sequence-level**: Sequence probability, average log-prob
+- **Sampling-based**: Self-consistency, semantic entropy, predictive entropy
+- **Generation methods**: Beam search uncertainty, nucleus sampling, contrastive decoding
+
+### <img src="website/img/active_icon.svg" width="40" height="40" align="center"> **Active Learning**
 - **Acquisition functions**: Entropy, BALD, margin, variance ratio
 - **Query strategies**: Uncertainty sampling, diversity sampling, Core-Set, BADGE
 - **Batch selection**: BatchBALD for efficient batch queries
 - **Committee methods**: Query by Committee (QBC)
 
-### 📈 **Distribution Shift Detection**
-- **Statistical tests**: MMD, Energy distance, Kolmogorov-Smirnov
-- **Classifier-based**: Black-Box Shift Detection (BBSD)
-- **Label shift**: Detect and correct label distribution changes ⭐ NEW
-- **Importance weighting**: Covariate shift adaptation ⭐ NEW
-
-### 📦 **Data & Utilities**
+### <img src="website/img/data_icon.svg" width="40" height="40" align="center"> **Data & Utilities**
 - Built-in datasets (MNIST, CIFAR-10/100, SVHN)
 - OOD benchmark datasets
 - Visualization utilities
@@ -68,9 +76,16 @@ Latin *incerto* = "uncertain, doubtful, unsure" - embracing uncertainty in ML pr
 
 ## 🚀 Installation
 
-### From PyPI (coming soon)
+### From PyPI
 ```bash
 pip install incerto
+```
+
+With optional extras:
+```bash
+pip install incerto[vision]   # + torchvision for vision datasets
+pip install incerto[llm]      # + transformers, accelerate, sentence-transformers
+pip install incerto[all]      # all optional dependencies
 ```
 
 ### From source
@@ -80,109 +95,310 @@ cd incerto
 pip install -e .
 ```
 
-### With development dependencies
-```bash
-git clone https://github.com/steverab/incerto.git
-cd incerto
-pip install -e ".[dev]"
-```
-
 ## 📖 Quick Start
 
 ### Calibration
 
 ```python
 import torch
+from torch.utils.data import DataLoader
 from incerto.calibration import TemperatureScaling, ece_score
 
-# Train your model
-model = YourModel()
-# ... training code ...
+# Assume you have a trained model
+model = ...  # Your trained classifier
+model.eval()
 
-# Post-hoc calibration
+# Collect validation predictions for calibration
+val_logits, val_labels = [], []
+with torch.no_grad():
+    for x, y in val_loader:
+        logits = model(x)
+        val_logits.append(logits)
+        val_labels.append(y)
+
+val_logits = torch.cat(val_logits)
+val_labels = torch.cat(val_labels)
+
+# Fit temperature scaling on validation set
 calibrator = TemperatureScaling()
 calibrator.fit(val_logits, val_labels)
+print(f"Learned temperature: {calibrator.temperature:.4f}")
+
+# Apply calibration to test set
+test_logits, test_labels = [], []
+with torch.no_grad():
+    for x, y in test_loader:
+        logits = model(x)
+        test_logits.append(logits)
+        test_labels.append(y)
+
+test_logits = torch.cat(test_logits)
+test_labels = torch.cat(test_labels)
 
 # Get calibrated predictions
-test_logits = model(test_data)
-calibrated_probs = calibrator.predict(test_logits).probs
+calibrated = calibrator.predict(test_logits)
 
-# Evaluate calibration
-ece = ece_score(test_logits, test_labels)
-print(f"Expected Calibration Error: {ece:.4f}")
+# Measure calibration improvement
+ece_before = ece_score(test_logits, test_labels, n_bins=15)
+ece_after = ece_score(calibrated.logits, test_labels, n_bins=15)
+print(f"ECE before: {ece_before:.4f} | ECE after: {ece_after:.4f}")
 ```
 
 ### OOD Detection
 
 ```python
-from incerto.ood import Energy
+import torch
+from torch.utils.data import DataLoader
+from incerto.ood import Energy, auroc
 
-# Initialize detector with trained model
+# Load in-distribution and OOD datasets
+id_loader = DataLoader(cifar10_test, batch_size=128)
+ood_loader = DataLoader(svhn_test, batch_size=128)
+
+# Create Energy-based OOD detector
 detector = Energy(model, temperature=1.0)
 
-# Score test samples (higher = more OOD)
-id_scores = detector.score(id_data)
-ood_scores = detector.score(ood_data)
+# Compute scores (higher = more OOD)
+id_scores = torch.cat([detector.score(x) for x, _ in id_loader])
+ood_scores = torch.cat([detector.score(x) for x, _ in ood_loader])
 
-# Make predictions with threshold
-predictions = detector.predict(test_data, threshold=0.5)
+# Combine scores and labels
+all_scores = torch.cat([id_scores, ood_scores])
+all_labels = torch.cat([
+    torch.zeros(len(id_scores)),  # 0 = in-distribution
+    torch.ones(len(ood_scores))   # 1 = OOD
+])
+
+# Evaluate detection performance
+auc = auroc(all_scores, all_labels)
+print(f"OOD Detection AUROC: {auc:.4f}")
+
+# Use detector with threshold
+test_batch = next(iter(id_loader))[0]
+predictions = detector.predict(test_batch, threshold=-10.0)
+print(f"Detected {predictions.sum()} OOD samples")
 ```
 
 ### Conformal Prediction
 
 ```python
+import torch
+from torch.utils.data import DataLoader
 from incerto.conformal import aps
 
-# Create conformal predictor
-predictor = aps(model, calibration_loader, alpha=0.1)  # 90% coverage
+# Calibrate conformal predictor (typically on held-out calibration set)
+alpha = 0.1  # Miscoverage rate (1 - alpha = 90% coverage)
+predictor = aps(model, calib_loader, alpha=alpha)
 
-# Get prediction sets
-prediction_sets = predictor(test_data)
-# Each set contains classes that cover the true label with 90% probability
+# Generate prediction sets on test data
+prediction_sets = []
+for x, y in test_loader:
+    sets = predictor(x)  # List of sets, one per sample
+    prediction_sets.extend(sets)
+
+# Compute coverage and average set size
+coverage = sum(y_true in pred_set
+               for y_true, pred_set in zip(test_labels, prediction_sets))
+coverage /= len(test_labels)
+
+avg_size = sum(len(s) for s in prediction_sets) / len(prediction_sets)
+print(f"Empirical coverage: {coverage:.3f} (target: {1-alpha:.3f})")
+print(f"Average set size: {avg_size:.2f}")
+```
+
+### Selective Prediction
+
+```python
+import torch
+from incerto.sp import SoftmaxThreshold
+
+# Create selective predictor (wraps your trained model)
+selector = SoftmaxThreshold(model)
+selector.eval()
+
+# Get logits and confidence scores for test data
+all_logits, all_confidences = [], []
+with torch.no_grad():
+    for x, y in test_loader:
+        logits, conf = selector(x, return_confidence=True)
+        all_logits.append(logits)
+        all_confidences.append(conf)
+
+all_logits = torch.cat(all_logits)
+all_confidences = torch.cat(all_confidences)
+predictions = all_logits.argmax(dim=-1)
+
+# Set confidence threshold (e.g., top 80% most confident)
+threshold = all_confidences.quantile(0.2)  # Reject bottom 20%
+
+# Evaluate selective accuracy
+selected_mask = all_confidences >= threshold
+selected_acc = (predictions[selected_mask] == test_labels[selected_mask]).float().mean()
+coverage = selected_mask.float().mean()
+
+print(f"Confidence threshold: {threshold:.4f}")
+print(f"Coverage: {coverage:.2%}")
+print(f"Selective accuracy: {selected_acc:.4f}")
+
+# Reject high-uncertainty samples
+rejected = selector.reject(all_confidences, threshold)
+print(f"Rejected samples: {rejected.sum()}/{len(predictions)}")
+```
+
+### Bayesian Neural Networks
+
+```python
+import torch
+from incerto.bayesian import VariationalBayesNN
+
+# Create Variational Bayesian NN
+# Specify architecture: input_dim, [hidden_sizes], output_dim
+vbnn = VariationalBayesNN(
+    in_features=784,
+    hidden_sizes=[512, 256],
+    out_features=10,
+    prior_std=1.0
+)
+
+# Train with variational loss (likelihood + KL divergence)
+optimizer = torch.optim.Adam(vbnn.parameters(), lr=0.001)
+
+for epoch in range(10):
+    vbnn.train()
+    for batch_x, batch_y in train_loader:
+        optimizer.zero_grad()
+        # Variational loss with Monte Carlo sampling
+        loss = vbnn.variational_loss(batch_x, batch_y, num_samples=10)
+        loss.backward()
+        optimizer.step()
+
+# Get predictions with variance estimates
+vbnn.eval()
+with torch.no_grad():
+    mean_pred, variance = vbnn.predict(test_x)
+
+print(f"Average predictive variance: {variance.mean():.4f}")
+
+# Identify high-uncertainty samples
+high_unc_mask = variance > variance.quantile(0.9)
+print(f"High uncertainty samples: {high_unc_mask.sum()}/{len(test_x)}")
+```
+
+### Distribution Shift Detection
+
+```python
+import torch
+from torch.utils.data import DataLoader
+from incerto.shift import MMDShiftDetector
+
+# Load reference (training) data
+reference_loader = DataLoader(train_dataset, batch_size=128)
+
+# Load production data (potentially shifted)
+production_loader = DataLoader(production_dataset, batch_size=128)
+
+# Create MMD shift detector with Gaussian kernel
+mmd_detector = MMDShiftDetector(sigma=1.0)
+
+# Fit on reference distribution
+mmd_detector.fit(reference_loader)
+
+# Compute shift score on production data
+shift_score = mmd_detector.score(production_loader)
+baseline_score = mmd_detector.score(reference_loader)  # Self-test
+
+# Calculate shift ratio
+shift_ratio = shift_score / (baseline_score + 1e-10)
+print(f"MMD shift score: {shift_score:.6f}")
+print(f"Shift ratio: {shift_ratio:.2f}x")
+
+# Alert based on shift magnitude
+if shift_ratio > 2.0:
+    print("⚠️  CRITICAL: Significant distribution shift detected!")
+    print("   Recommendation: Retrain model immediately")
+elif shift_ratio > 1.5:
+    print("⚠️  WARNING: Moderate shift detected")
+    print("   Recommendation: Monitor closely, consider retraining")
+else:
+    print("✓ No significant shift detected")
 ```
 
 ### LLM Uncertainty
 
 ```python
-from incerto.llm import TokenEntropy, SequenceEntropy, SelfConsistency
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from sentence_transformers import SentenceTransformer
+from incerto.llm import SemanticEntropy, TokenEntropy
 
-# Token-level uncertainty
-logits = llm(prompt)  # (batch, seq_len, vocab_size)
+# Load language model and embedding model
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+model.eval()
+
+# Example prompt
+prompt = "The capital of France is"
+inputs = tokenizer(prompt, return_tensors="pt")
+
+# --- Token-level uncertainty ---
+with torch.no_grad():
+    outputs = model(**inputs, return_dict=True)
+    logits = outputs.logits
+
 token_entropy = TokenEntropy.compute(logits)
+print(f"Average token entropy: {token_entropy.mean():.4f}")
 
-# Sequence-level uncertainty
-seq_entropy = SequenceEntropy.compute(logits, aggregation='mean')
+# --- Semantic Entropy: cluster semantically equivalent responses ---
+num_samples = 10
+responses = []
+for _ in range(num_samples):
+    output_ids = model.generate(
+        **inputs,
+        max_length=50,
+        do_sample=True,
+        temperature=0.8,
+        top_p=0.9,
+        num_return_sequences=1
+    )
+    response = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    responses.append(response)
 
-# Sampling-based uncertainty
-responses = [llm.generate(prompt) for _ in range(10)]
-consistency = SelfConsistency.compute(responses)
-print(f"Agreement rate: {consistency['agreement_rate']:.2f}")
+# Compute semantic entropy with embedding model
+semantic_unc = SemanticEntropy.compute(
+    responses,
+    similarity_threshold=0.85,
+    embedding_model=embedding_model
+)
+
+print(f"Semantic entropy: {semantic_unc['semantic_entropy']:.4f}")
+print(f"Number of semantic clusters: {semantic_unc['num_clusters']}")
+
+# High semantic entropy indicates uncertainty
+if semantic_unc['semantic_entropy'] > 1.5:
+    print("⚠️  High uncertainty: Model gives diverse semantic answers")
+else:
+    print("✓ Low uncertainty: Responses are semantically consistent")
 ```
 
 ## 📚 Examples
 
-The `examples/` directory contains comprehensive tutorials:
+The `examples/` directory contains Jupyter notebook tutorials covering all major features:
 
-### 01_synthetic - Basic Concepts
-- `calibration_basics.py` - Calibration methods on synthetic data
-- `ood_detection_basics.py` - OOD detection fundamentals
-- `conformal_prediction.py` - Conformal prediction sets
-- `selective_prediction.py` - Selective classification
-
-### 02_tabular - Tabular Data
-- `posthoc_calibration.py` - Post-hoc calibration methods
-- `training_methods.py` - Training-time calibration
-
-### 03_vision - Computer Vision
-- `mnist/` - MNIST examples (post-hoc, training methods, ensembles)
-- `cifar/` - CIFAR-10 examples (advanced training, OOD detection)
-
-### 04_nlp - Natural Language Processing
-- `llm_uncertainty.py` - LLM uncertainty quantification
+| Notebook | Description |
+|----------|-------------|
+| `01_calibration.ipynb` | Post-hoc and training-time calibration methods |
+| `02_ood_detection.ipynb` | Out-of-distribution detection techniques |
+| `03_selective_prediction.ipynb` | Selective classification with reject option |
+| `04_conformal_prediction.ipynb` | Distribution-free prediction sets |
+| `05_bayesian_uncertainty.ipynb` | Bayesian neural networks and uncertainty |
+| `06_active_learning.ipynb` | Query strategies and acquisition functions |
+| `07_shift_detection.ipynb` | Distribution shift detection methods |
+| `08_llm_uncertainty.ipynb` | LLM uncertainty quantification |
 
 ## 🧪 Testing
 
-**incerto** has comprehensive test coverage (190 tests, 100% passing):
+**incerto** has comprehensive test coverage (**509 tests**, 100% passing):
 
 ```bash
 # Run all tests
@@ -192,6 +408,9 @@ pytest
 pytest tests/test_calibration/
 pytest tests/test_ood/
 pytest tests/test_conformal/
+pytest tests/test_shift/
+pytest tests/test_bayesian/
+pytest tests/test_active/
 
 # Run with coverage
 pytest --cov=incerto --cov-report=term-missing
@@ -209,6 +428,8 @@ pytest --cov=incerto --cov-report=term-missing
 - Platt Scaling
 - Isotonic Regression
 - Histogram Binning
+- Dirichlet Calibration
+- Beta Calibration
 
 **Training-time:**
 - Label Smoothing
@@ -257,6 +478,7 @@ pytest --cov=incerto --cov-report=term-missing
 **Regression:**
 - Jackknife+
 - CV+
+- Conformalized Quantile Regression
 </details>
 
 <details>
@@ -287,6 +509,59 @@ pytest --cov=incerto --cov-report=term-missing
 - Contrastive Decoding
 </details>
 
+<details>
+<summary><b>Selective Prediction Methods</b></summary>
+
+- Softmax Threshold (confidence thresholding)
+- Deep Gambler
+- SelectiveNet
+- Self-Adaptive Training (SAT)
+</details>
+
+<details>
+<summary><b>Bayesian Methods</b></summary>
+
+- MC Dropout
+- Deep Ensembles
+- SWAG (Stochastic Weight Averaging - Gaussian)
+- Laplace Approximation
+- Variational Bayes (Bayes by Backprop)
+</details>
+
+<details>
+<summary><b>Shift Detection Methods</b></summary>
+
+**Statistical:**
+- MMD (Maximum Mean Discrepancy)
+- Energy Distance
+- Kolmogorov-Smirnov Test
+
+**Classifier-based:**
+- Black-Box Shift Detection (BBSD)
+- Label Shift Detection
+- Importance Weighting
+</details>
+
+<details>
+<summary><b>Active Learning Methods</b></summary>
+
+**Acquisition Functions:**
+- Entropy Sampling
+- BALD (Bayesian Active Learning by Disagreement)
+- Least Confidence
+- Margin Sampling
+- Variance Ratio
+- Mean STD
+- BatchBALD
+
+**Query Strategies:**
+- Uncertainty Sampling
+- Diversity Sampling
+- Core-Set Selection
+- BADGE
+- Query by Committee
+</details>
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -309,22 +584,11 @@ If you use **incerto** in your research, please cite:
 }
 ```
 
-## 🙏 Acknowledgments
-
-This library implements methods from many research papers. Key references:
-
-- **Calibration**: Guo et al. (2017), Platt (1999), Zadrozny & Elkan (2002)
-- **OOD Detection**: Hendrycks & Gimpel (2017), Liu et al. (2020), Lee et al. (2018)
-- **Conformal Prediction**: Vovk et al. (2005), Romano et al. (2020), Angelopoulos et al. (2021)
-- **Selective Prediction**: Geifman & El-Yaniv (2019), Huang et al. (2020)
-- **LLM Uncertainty**: Kuhn et al. (2023), Lin et al. (2023)
-
 ## 🔗 Links
 
-- **Documentation**: (coming soon)
-- **Paper**: (coming soon)
+- **Documentation**: [incerto.dev/docs](https://incerto.dev/docs/)
+- **Website**: [incerto.dev](https://incerto.dev)
 - **Issues**: [GitHub Issues](https://github.com/steverab/incerto/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/steverab/incerto/discussions)
 
 ---
 

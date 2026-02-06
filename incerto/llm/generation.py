@@ -7,7 +7,7 @@ beam search, nucleus sampling, etc.
 
 from __future__ import annotations
 import torch
-from typing import List, Tuple
+from typing import List
 
 
 class BeamSearchUncertainty:

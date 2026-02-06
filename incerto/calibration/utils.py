@@ -21,10 +21,13 @@ def get_bin_stats(confidences: np.ndarray, accuracies: np.ndarray, n_bins: int):
     """
     bins = np.linspace(0.0, 1.0, n_bins + 1)
     bin_ids = np.digitize(confidences, bins, right=True) - 1
+    bin_ids = np.clip(bin_ids, 0, n_bins - 1)
     bin_conf = np.zeros(n_bins)
     bin_acc = np.zeros(n_bins)
     counts = np.zeros(n_bins)
     total = len(confidences)
+    if total == 0:
+        return bin_conf, bin_acc, counts
 
     for b in range(n_bins):
         idx = bin_ids == b

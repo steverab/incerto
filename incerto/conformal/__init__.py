@@ -4,6 +4,7 @@ Conformal prediction methods, metrics, and visualizations.
 
 # Conformal methods
 from .methods import (
+    ConformalPredictor,
     inductive_conformal,
     mondrian_conformal,
     aps,
@@ -35,6 +36,7 @@ from .utils import (
 
 __all__ = [
     # Methods
+    "ConformalPredictor",
     "inductive_conformal",
     "mondrian_conformal",
     "aps",

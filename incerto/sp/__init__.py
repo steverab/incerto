@@ -25,6 +25,7 @@ from .metrics import (
 # Visualization
 from .visual import (
     plot_risk_coverage,
+    plot_accuracy_coverage,
 )
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "accuracy_coverage_curve",
     # Visual
     "plot_risk_coverage",
+    "plot_accuracy_coverage",
 ]

@@ -31,7 +31,7 @@ def mixup_data(
         Zhang et al. "mixup: Beyond Empirical Risk Minimization" (ICLR 2018)
 
     Args:
-        x: Input batch (N, *)
+        x: Input batch ``(N, ...)``
         y: Target labels (N,)
         alpha: Beta distribution parameter (default: 1.0)
 
@@ -144,12 +144,12 @@ class OutlierExposureLoss(nn.Module):
 
         # Outlier exposure: encourage uniform predictions
         num_classes = logits_out.size(-1)
-        probs_out = F.softmax(logits_out, dim=-1)
-        uniform = torch.ones_like(probs_out) / num_classes
+        log_probs_out = F.log_softmax(logits_out, dim=-1)
+        uniform = torch.ones_like(log_probs_out) / num_classes
 
-        # KL divergence from uniform
+        # KL divergence from uniform: KL(uniform || p_out)
         loss_oe = F.kl_div(
-            probs_out.log(),
+            log_probs_out,
             uniform,
             reduction="batchmean",
         )

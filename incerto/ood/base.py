@@ -57,7 +57,12 @@ class OODDetector(ABC):
 
         Args:
             model: A trained PyTorch model (nn.Module)
+
+        Raises:
+            TypeError: If model is not an nn.Module.
         """
+        if not isinstance(model, torch.nn.Module):
+            raise TypeError(f"model must be an nn.Module, got {type(model).__name__}")
         self.model = model.eval()
         for p in self.model.parameters():
             p.requires_grad_(False)
@@ -151,3 +156,30 @@ class OODDetector(ABC):
             torch.save(self.state_dict(), path)
         except Exception as e:
             raise SerializationError(f"Failed to save to {path}: {e}") from e
+
+    @classmethod
+    def load(cls, path: str, model: torch.nn.Module, **kwargs) -> "OODDetector":
+        """
+        Load detector state from a file.
+
+        Args:
+            path: File path to load from.
+            model: A trained PyTorch model to attach to the detector.
+            **kwargs: Additional arguments for the detector constructor.
+
+        Returns:
+            An OODDetector instance with loaded state.
+
+        Raises:
+            SerializationError: If loading fails.
+        """
+        from ..exceptions import SerializationError
+
+        try:
+            state = torch.load(path, weights_only=True)
+        except Exception as e:
+            raise SerializationError(f"Failed to load from {path}: {e}") from e
+
+        detector = cls(model, **kwargs)
+        detector.load_state_dict(state)
+        return detector

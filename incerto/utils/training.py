@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import random
-from typing import Optional
 from tqdm import tqdm
 
 

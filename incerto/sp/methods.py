@@ -7,13 +7,27 @@ mask indicating which samples are *rejected* (i.e. deferred).
 """
 
 from __future__ import annotations
-from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .base import BaseSelectivePredictor
+
+
+def _infer_output_dim(backbone: nn.Module) -> int:
+    """Infer output dimension via a probe forward pass."""
+    was_training = backbone.training
+    backbone.eval()
+    # Find an input dimension from the first parameter
+    first_param = next(backbone.parameters())
+    in_features = first_param.shape[-1]
+    with torch.no_grad():
+        probe = torch.zeros(1, in_features, device=first_param.device)
+        out = backbone(probe)
+    if was_training:
+        backbone.train()
+    return out.shape[-1]
 
 
 # ----------------------------------------------------------------------
@@ -37,31 +51,77 @@ class DeepGambler(BaseSelectivePredictor):
     """
     Add an extra *abstain* logit and train with the gambler's loss:
 
-        L = −log( (1 − r) * p_y + r / C )
+        L = −log( p_y + r / o )
 
-    where `r` is the reserve (confidence to abstain) and `C` is
-    the number of classes.
+    where ``o`` is the reward for a correct prediction, ``p_y`` is the
+    probability assigned to the true class, and ``r`` = P(abstain).
+
+    Reference:
+        Ziyin et al., "Deep Gamblers: Learning to Abstain with Portfolio
+        Theory", NeurIPS 2019.
     """
 
-    def __init__(self, backbone: nn.Module, num_classes: int):
+    def __init__(
+        self, backbone: nn.Module, num_classes: int, num_features: int | None = None
+    ):
         super().__init__()
         self.backbone = backbone
         # small linear head that outputs C + 1 logits (extra abstain)
-        last_dim = list(backbone.parameters())[-1].shape[0]
+        last_dim = (
+            num_features if num_features is not None else _infer_output_dim(backbone)
+        )
         self.head = nn.Linear(last_dim, num_classes + 1)
+        # Initialise the abstain logit bias to a negative value so the model
+        # starts by predicting classes rather than collapsing to always-abstain.
+        with torch.no_grad():
+            self.head.bias[-1] = -3.0
 
     def _forward_logits(self, x: torch.Tensor) -> torch.Tensor:
         feats = self.backbone(x)
         return self.head(feats)
 
     def confidence_from_logits(self, logits: torch.Tensor) -> torch.Tensor:
-        *class_logits, abstain_logit = logits.split_with_sizes(
-            [logits.size(-1) - 1, 1], dim=-1
-        )
-        class_logits = torch.cat(class_logits, dim=-1)
-        # confidence is 1 − probability of abstain
-        probs = F.softmax(torch.cat([class_logits, abstain_logit], dim=-1), dim=-1)
+        # confidence is 1 − P(abstain), where abstain is the last logit
+        probs = F.softmax(logits, dim=-1)
         return 1.0 - probs[..., -1]
+
+    @staticmethod
+    def gambler_loss(
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        reward: float = 2.2,
+    ) -> torch.Tensor:
+        """
+        Gambler's loss from Ziyin et al. (NeurIPS 2019).
+
+        The loss encourages the model to either predict correctly or abstain:
+
+            L = −log( p_y + r / o )
+
+        where ``o`` = reward, ``p_y`` = P(true class), ``r`` = P(abstain).
+        Higher ``reward`` penalises abstention more, pushing towards prediction.
+
+        Args:
+            logits: Model output of shape (batch, num_classes + 1).
+                    Last column is the abstain logit.
+            targets: Ground-truth class labels of shape (batch,).
+            reward: Reward for correct prediction (called *o* in the paper).
+                    Must be > 1. Higher values discourage abstention.
+
+        Returns:
+            Scalar loss.
+        """
+        probs = F.softmax(logits, dim=-1)
+        num_classes = logits.size(-1) - 1
+        class_probs = probs[:, :num_classes]
+        reserve = probs[:, -1]  # P(abstain)
+
+        # Probability assigned to the true class
+        p_target = class_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
+
+        # Gambler's loss: −log( p_target + reserve / o )
+        loss = -torch.log(p_target + reserve / reward + 1e-9)
+        return loss.mean()
 
 
 # ----------------------------------------------------------------------
@@ -81,10 +141,14 @@ class SelectiveNet(BaseSelectivePredictor):
         num_classes: int,
         hidden: int = 128,
         alpha: float = 0.5,
+        lam: float = 32.0,
+        num_features: int | None = None,
     ):
         super().__init__()
         self.backbone = backbone
-        last_dim = list(backbone.parameters())[-1].shape[0]
+        last_dim = (
+            num_features if num_features is not None else _infer_output_dim(backbone)
+        )
 
         self.h = nn.Linear(last_dim, num_classes)
         self.g = nn.Sequential(
@@ -94,6 +158,7 @@ class SelectiveNet(BaseSelectivePredictor):
             nn.Sigmoid(),
         )
         self.alpha = alpha  # coverage target in loss
+        self.lam = lam  # penalty coefficient for coverage constraint
 
     def _forward_logits(self, x: torch.Tensor) -> torch.Tensor:
         feats = self.backbone(x)
@@ -112,8 +177,61 @@ class SelectiveNet(BaseSelectivePredictor):
             return logits, sel_prob
         return logits
 
-    def confidence_from_logits(self, logits):  # unused (override forward)
-        raise NotImplementedError
+    def confidence_from_logits(self, logits):
+        """Not applicable — SelectiveNet uses a dedicated selection head g(x).
+
+        Use ``forward(x, return_confidence=True)`` instead.
+        """
+        raise NotImplementedError(
+            "SelectiveNet uses a dedicated selection head (g). "
+            "Call forward(x, return_confidence=True) to get confidence."
+        )
+
+    def selective_loss(
+        self,
+        logits: torch.Tensor,
+        targets: torch.Tensor,
+        selection: torch.Tensor,
+        coverage_target: float | None = None,
+    ) -> torch.Tensor:
+        """
+        SelectiveNet loss from Geifman & El-Yaniv (ICML 2019).
+
+        Combines a selection-weighted prediction loss with a quadratic
+        coverage penalty:
+
+            L = L_selective + λ * max(0, c − Φ)²
+
+        where ``L_selective`` is the cross-entropy weighted by selection
+        probabilities, ``c`` is the coverage target (``self.alpha``),
+        ``Φ`` is the empirical coverage, and ``λ`` is the penalty
+        coefficient (``self.lam``).
+
+        Args:
+            logits: Class logits of shape (batch, num_classes).
+            targets: Ground-truth labels of shape (batch,).
+            selection: Selection probabilities g(x) of shape (batch,)
+                       in [0, 1], as returned by
+                       ``forward(x, return_confidence=True)``.
+            coverage_target: Desired coverage. Defaults to ``self.alpha``
+                             set at construction time.
+
+        Returns:
+            Scalar loss.
+        """
+        c = coverage_target if coverage_target is not None else self.alpha
+
+        # Selection-weighted cross-entropy
+        per_sample_loss = F.cross_entropy(logits, targets, reduction="none")
+        empirical_coverage = selection.mean()
+        selective_loss = (per_sample_loss * selection).mean() / (
+            empirical_coverage + 1e-9
+        )
+
+        # Quadratic coverage penalty
+        coverage_penalty = self.lam * torch.clamp(c - empirical_coverage, min=0.0) ** 2
+
+        return selective_loss + coverage_penalty
 
 
 # ----------------------------------------------------------------------

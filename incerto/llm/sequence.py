@@ -8,7 +8,7 @@ a single uncertainty score for an entire generated sequence.
 from __future__ import annotations
 import torch
 import torch.nn.functional as F
-from .token import TokenEntropy, SurprisalScore
+from .token import TokenEntropy
 
 
 class SequenceProbability:
@@ -101,6 +101,14 @@ class NormalizedSequenceProb:
 
     Accounts for the fact that longer sequences naturally have
     lower probabilities. Common in beam search and generation.
+
+    Uses the standard length normalization formula:
+        score = sum(log_probs) / length^alpha
+
+    where alpha (length_penalty) controls the strength of normalization:
+        - alpha=0: no normalization (favor short sequences)
+        - alpha=1: normalize by length (average log prob)
+        - alpha>1: favor longer sequences
     """
 
     @staticmethod
@@ -117,26 +125,38 @@ class NormalizedSequenceProb:
         Args:
             logits: Token logits of shape (batch, seq_len, vocab_size)
             token_ids: Generated token IDs of shape (batch, seq_len)
-            length_penalty: Length normalization factor (higher = more penalty)
+            length_penalty: Length normalization exponent (alpha). Default 1.0.
             mask: Optional mask for padding of shape (batch, seq_len)
             dim: Dimension to compute softmax over (default: -1)
 
         Returns:
-            Normalized probabilities of shape (batch,)
+            Normalized probabilities of shape (batch,), in range [0, 1].
+            When alpha=1, this equals the geometric mean of per-token probabilities.
         """
-        avg_log_prob = AverageLogProb.compute(logits, token_ids, mask, dim)
+        log_probs = F.log_softmax(logits, dim=dim)
+
+        # Gather log probs for actual tokens
+        token_log_probs = torch.gather(
+            log_probs, dim=-1, index=token_ids.unsqueeze(-1)
+        ).squeeze(-1)
 
         if mask is not None:
-            seq_lengths = mask.sum(dim=1)
+            token_log_probs = token_log_probs * mask
+            seq_lengths = mask.sum(dim=1).float()
         else:
             seq_lengths = torch.tensor(
                 token_ids.size(1), dtype=torch.float, device=token_ids.device
             ).expand(token_ids.size(0))
 
-        # Length normalization: score / length^penalty
-        normalized_score = avg_log_prob / (seq_lengths**length_penalty)
+        # Sum of log probs
+        sum_log_prob = token_log_probs.sum(dim=1)
 
-        return torch.exp(normalized_score)
+        # Length normalization: sum(log_probs) / length^alpha
+        # This is equivalent to geometric mean when alpha=1
+        normalized_log_score = sum_log_prob / (seq_lengths**length_penalty)
+
+        # Return as probability (geometric mean of per-token probabilities when alpha=1)
+        return torch.exp(normalized_log_score)
 
 
 class SequenceEntropy:

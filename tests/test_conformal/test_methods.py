@@ -20,6 +20,10 @@ from incerto.conformal import (
     mondrian_conformal,
     aps,
     raps,
+    jackknife_plus,
+    cv_plus,
+    conformalized_quantile_regression,
+    ConformalPredictor,
 )
 
 
@@ -109,6 +113,31 @@ class TestMondrianConformal:
         x_test = torch.randn(5, 64)
         pred_sets = predictor(x_test)
         assert len(pred_sets) == 5
+
+    def test_unseen_partition_falls_back_gracefully(self, ood_model, ood_id_loader):
+        """Mondrian should not KeyError when test partition wasn't in calibration."""
+        alpha = 0.1
+
+        # Partition that maps all calib labels to group 0,
+        # then returns unseen group 999 at test time.
+        call_count = {"n": 0}
+
+        def shifting_partition(x, y):
+            call_count["n"] += 1
+            if call_count["n"] <= 4:  # calibration batches (100 samples / 32 = 4)
+                return torch.zeros_like(y)
+            return torch.full_like(y, 999)
+
+        predictor = mondrian_conformal(
+            ood_model, ood_id_loader, alpha, partition_fn=shifting_partition
+        )
+        x_test = torch.randn(5, 64)
+        # Should not raise KeyError; unseen partition gets conservative fallback
+        pred_sets = predictor(x_test)
+        assert len(pred_sets) == 5
+        # Conservative fallback: qhat=1.0 → threshold=0 → all classes included
+        for ps in pred_sets:
+            assert len(ps) == 10  # num_classes
 
 
 class TestAPS:
@@ -234,3 +263,264 @@ class TestConformalIntegration:
             if len(ps) > 0:  # If not empty
                 assert ps.min() >= 0
                 assert ps.max() < num_classes
+
+
+# ---- Alpha validation tests ----
+
+
+class TestAlphaValidation:
+    """Test that invalid alpha is rejected by all methods."""
+
+    def test_invalid_alpha_raises(self, ood_model, ood_id_loader):
+        """Alpha outside (0, 1) should raise ValueError."""
+        for bad_alpha in [0.0, 1.0, -0.1, 1.5]:
+            with pytest.raises(ValueError, match="alpha must be in"):
+                inductive_conformal(ood_model, ood_id_loader, bad_alpha)
+
+
+# ---- Conformal regression tests ----
+
+
+def _make_regression_dataset(n=60, noise=0.1):
+    """Create a simple regression dataset: y = 2x + noise."""
+    x = torch.randn(n, 1)
+    y = 2 * x.squeeze() + noise * torch.randn(n)
+    return TensorDataset(x, y)
+
+
+def _train_linear_model(dataset):
+    """Train a simple linear model on a dataset (for jackknife_plus / cv_plus).
+
+    Uses torch.enable_grad() because the caller (jackknife_plus/cv_plus)
+    wraps everything in @torch.no_grad().
+    """
+    model = nn.Linear(1, 1)
+    loader = DataLoader(dataset, batch_size=len(dataset))
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    model.train()
+    with torch.enable_grad():
+        for _ in range(50):
+            for xb, yb in loader:
+                optimizer.zero_grad()
+                loss = nn.functional.mse_loss(model(xb).squeeze(), yb)
+                loss.backward()
+                optimizer.step()
+    model.eval()
+    return model
+
+
+class TestJackknifePlus:
+    """Test jackknife_plus conformal regression."""
+
+    def test_returns_callable(self, set_seed):
+        """Test that jackknife_plus returns a callable predictor."""
+        dataset = _make_regression_dataset(n=20)
+        predictor = jackknife_plus(_train_linear_model, dataset, alpha=0.1)
+        assert callable(predictor)
+
+    def test_predictor_returns_intervals(self, set_seed):
+        """Test that predictor returns (lower, upper) tensors."""
+        dataset = _make_regression_dataset(n=20)
+        predictor = jackknife_plus(_train_linear_model, dataset, alpha=0.1)
+
+        x_test = torch.randn(5, 1)
+        lower, upper = predictor(x_test)
+
+        assert lower.shape == (5,)
+        assert upper.shape == (5,)
+        assert torch.isfinite(lower).all()
+        assert torch.isfinite(upper).all()
+        # Upper should be >= lower
+        assert (upper >= lower).all()
+
+
+class TestCVPlus:
+    """Test cv_plus conformal regression."""
+
+    def test_returns_callable(self, set_seed):
+        """Test that cv_plus returns a callable predictor."""
+        dataset = _make_regression_dataset(n=30)
+        predictor = cv_plus(_train_linear_model, dataset, folds=3, alpha=0.1)
+        assert callable(predictor)
+
+    def test_predictor_returns_intervals(self, set_seed):
+        """Test that predictor returns (lower, upper) tensors."""
+        dataset = _make_regression_dataset(n=30)
+        predictor = cv_plus(_train_linear_model, dataset, folds=3, alpha=0.1)
+
+        x_test = torch.randn(5, 1)
+        lower, upper = predictor(x_test)
+
+        assert lower.shape == (5,)
+        assert upper.shape == (5,)
+        assert torch.isfinite(lower).all()
+        assert torch.isfinite(upper).all()
+
+
+class TestConformalized_QR:
+    """Test conformalized_quantile_regression."""
+
+    def test_returns_callable(self, set_seed):
+        """Test that CQR returns a callable predictor."""
+        # Create a model that outputs two quantiles
+        quantile_model = nn.Linear(1, 2)
+        dataset = _make_regression_dataset(n=50)
+        loader = DataLoader(dataset, batch_size=50)
+
+        predictor = conformalized_quantile_regression(quantile_model, loader, alpha=0.1)
+        assert callable(predictor)
+
+    def test_predictor_returns_intervals(self, set_seed):
+        """Test that CQR predictor returns (lower, upper) tensors."""
+        quantile_model = nn.Linear(1, 2)
+        dataset = _make_regression_dataset(n=50)
+        loader = DataLoader(dataset, batch_size=50)
+
+        predictor = conformalized_quantile_regression(quantile_model, loader, alpha=0.1)
+
+        x_test = torch.randn(5, 1)
+        lower, upper = predictor(x_test)
+
+        assert lower.shape == (5,)
+        assert upper.shape == (5,)
+        assert torch.isfinite(lower).all()
+        assert torch.isfinite(upper).all()
+
+    def test_single_output_model(self, set_seed):
+        """Test CQR with a model that outputs a single value (squeeze to 1D)."""
+
+        class SqueezeModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(1, 1)
+
+            def forward(self, x):
+                return self.linear(x).squeeze(-1)  # (batch,) — 1D
+
+        model = SqueezeModel()
+        dataset = _make_regression_dataset(n=50)
+        loader = DataLoader(dataset, batch_size=50)
+
+        predictor = conformalized_quantile_regression(model, loader, alpha=0.1)
+
+        x_test = torch.randn(5, 1)
+        lower, upper = predictor(x_test)
+        assert lower.shape == (5,)
+        assert upper.shape == (5,)
+
+
+class TestConformalPredictor:
+    """Test the ConformalPredictor wrapper class."""
+
+    def test_from_method(self, ood_model, ood_id_loader):
+        """Test factory method creates a valid predictor."""
+        cp = ConformalPredictor.from_method(
+            "aps", model=ood_model, calib_loader=ood_id_loader, alpha=0.1
+        )
+        assert cp.method == "aps"
+        assert cp.alpha == 0.1
+
+        x_test = torch.randn(3, 64)
+        result = cp.predict(x_test)
+        assert isinstance(result, list)
+        assert len(result) == 3
+
+    def test_call_delegates_to_predict(self, ood_model, ood_id_loader):
+        """Test __call__ delegates to predict."""
+        cp = ConformalPredictor.from_method(
+            "inductive_conformal",
+            model=ood_model,
+            calib_loader=ood_id_loader,
+            alpha=0.1,
+        )
+        x_test = torch.randn(3, 64)
+        assert len(cp(x_test)) == len(cp.predict(x_test))
+
+    def test_unknown_method_raises(self):
+        """Test that unknown method name raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown method"):
+            ConformalPredictor.from_method("nonexistent", alpha=0.1)
+
+    def test_repr(self, ood_model, ood_id_loader):
+        """Test repr string."""
+        cp = ConformalPredictor.from_method(
+            "raps", model=ood_model, calib_loader=ood_id_loader, alpha=0.1
+        )
+        r = repr(cp)
+        assert "raps" in r
+        assert "0.1" in r
+
+
+class TestCoverageGuarantee:
+    """Statistical tests that conformal methods achieve the advertised coverage."""
+
+    def _make_trained_model(self, n_train=500, n_classes=5):
+        """Train a small model well enough to test conformal coverage."""
+        torch.manual_seed(0)
+        model = nn.Sequential(nn.Linear(8, 32), nn.ReLU(), nn.Linear(32, n_classes))
+        X = torch.randn(n_train, 8)
+        # Labels from argmax of a fixed linear map so the problem is learnable
+        W_true = torch.randn(8, n_classes)
+        y = (X @ W_true).argmax(dim=-1)
+
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        dataset = TensorDataset(X, y)
+        loader = DataLoader(dataset, batch_size=64, shuffle=True)
+        model.train()
+        for _ in range(30):
+            for xb, yb in loader:
+                optimizer.zero_grad()
+                loss = nn.functional.cross_entropy(model(xb), yb)
+                loss.backward()
+                optimizer.step()
+        model.eval()
+        return model, W_true
+
+    def test_inductive_conformal_coverage(self):
+        """ICP empirical coverage on held-out data should be >= 1-alpha."""
+        model, W_true = self._make_trained_model()
+        alpha = 0.1
+
+        # Calibration set
+        torch.manual_seed(1)
+        X_cal = torch.randn(300, 8)
+        y_cal = (X_cal @ W_true).argmax(dim=-1)
+        cal_loader = DataLoader(TensorDataset(X_cal, y_cal), batch_size=64)
+
+        predictor = inductive_conformal(model, cal_loader, alpha=alpha)
+
+        # Test set
+        torch.manual_seed(2)
+        X_test = torch.randn(500, 8)
+        y_test = (X_test @ W_true).argmax(dim=-1)
+        pred_sets = predictor(X_test)
+
+        covered = sum(y_test[i] in pred_sets[i] for i in range(len(y_test)))
+        coverage = covered / len(y_test)
+        # Allow small slack below 1-alpha for finite-sample fluctuation
+        assert (
+            coverage >= (1 - alpha) - 0.05
+        ), f"Coverage {coverage:.3f} too low (target {1-alpha})"
+
+    def test_aps_coverage(self):
+        """APS empirical coverage on held-out data should be >= 1-alpha."""
+        model, W_true = self._make_trained_model()
+        alpha = 0.1
+
+        torch.manual_seed(1)
+        X_cal = torch.randn(300, 8)
+        y_cal = (X_cal @ W_true).argmax(dim=-1)
+        cal_loader = DataLoader(TensorDataset(X_cal, y_cal), batch_size=64)
+
+        predictor = aps(model, cal_loader, alpha=alpha)
+
+        torch.manual_seed(2)
+        X_test = torch.randn(500, 8)
+        y_test = (X_test @ W_true).argmax(dim=-1)
+        pred_sets = predictor(X_test)
+
+        covered = sum(y_test[i] in pred_sets[i] for i in range(len(y_test)))
+        coverage = covered / len(y_test)
+        assert (
+            coverage >= (1 - alpha) - 0.05
+        ), f"Coverage {coverage:.3f} too low (target {1-alpha})"

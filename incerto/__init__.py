@@ -15,7 +15,7 @@ Submodules:
 __version__ = "0.1.0"
 
 # Core utilities
-from .core import predictive_entropy
+from .core import entropy
 
 # Exceptions
 from .exceptions import (
@@ -39,7 +39,7 @@ from . import active
 
 __all__ = [
     "__version__",
-    "predictive_entropy",
+    "entropy",
     # Exceptions
     "IncertoError",
     "NotFittedError",

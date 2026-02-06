@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://incerto.dev/docs/
+    about: Check the documentation for usage guides and API reference
+  - name: Discussions
+    url: https://github.com/steverab/incerto/discussions
+    about: Ask questions and discuss ideas with the community

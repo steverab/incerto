@@ -4,10 +4,8 @@ Tests for training-time calibration methods.
 All are nn.Module losses that take (logits, labels) except where noted.
 """
 
-import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from incerto.calibration.training import (
     LabelSmoothingLoss,
@@ -167,7 +165,7 @@ class TestConfidencePenalty:
         ce_loss = nn.CrossEntropyLoss()
         cp_loss = ConfidencePenalty(beta=0.1)
 
-        ce = ce_loss(multiclass_logits, multiclass_labels)
+        ce_loss(multiclass_logits, multiclass_labels)
         cp = cp_loss(multiclass_logits, multiclass_labels)
 
         # CP = CE - beta * entropy, so can be less than CE (encourages uncertainty)
@@ -421,7 +419,7 @@ class TestTrainingMethodIntegration:
         # ConfidencePenalty = CE - beta * entropy
         cp_loss = ConfidencePenalty(beta=0.1)
 
-        ce = ce_loss(multiclass_logits, multiclass_labels)
+        ce_loss(multiclass_logits, multiclass_labels)
         cp = cp_loss(multiclass_logits, multiclass_labels)
 
         # CP modifies CE by entropy regularization (can be more or less than CE)

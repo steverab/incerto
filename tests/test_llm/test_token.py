@@ -2,7 +2,6 @@
 Tests for LLM token-level uncertainty methods.
 """
 
-import pytest
 import torch
 
 from incerto.llm import (

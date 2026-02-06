@@ -10,7 +10,11 @@ This module provides:
 
 from .models import ConvNet, ResNet18, MLP
 from .training import train_epoch, evaluate, seed_everything
-from .visualization import plot_training_curves, plot_uncertainty_distribution
+from .visualization import (
+    plot_training_curves,
+    plot_uncertainty_distribution,
+    plot_2d_classification,
+)
 from .logging import get_logger, setup_logging, disable_logging
 
 __all__ = [
@@ -25,6 +29,7 @@ __all__ = [
     # Visualization
     "plot_training_curves",
     "plot_uncertainty_distribution",
+    "plot_2d_classification",
     # Logging
     "get_logger",
     "setup_logging",

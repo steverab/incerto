@@ -9,8 +9,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import torch
 import torch.nn.functional as F
-import numpy as np
-from typing import Optional
 
 
 class BaseAcquisition(ABC):
@@ -28,7 +26,7 @@ class BaseAcquisition(ABC):
 
         Args:
             model: Trained model
-            x: Unlabeled samples (N, *)
+            x: Unlabeled samples ``(N, ...)``
             **kwargs: Additional arguments
 
         Returns:
@@ -130,6 +128,11 @@ class MarginAcquisition(BaseAcquisition):
         logits = model(x)
         probs = F.softmax(logits, dim=-1)
 
+        # Guard: need at least 2 classes for margin
+        if probs.size(-1) < 2:
+            # Single class: no margin, return zeros (no uncertainty)
+            return torch.zeros(len(x), device=x.device)
+
         # Sort probabilities
         sorted_probs, _ = torch.sort(probs, descending=True, dim=-1)
 
@@ -170,32 +173,37 @@ class BALDAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute BALD scores."""
-        # Enable dropout for MC sampling
-        model.train()
+        was_training = model.training
+        try:
+            # Enable dropout for MC sampling
+            model.train()
 
-        # Collect predictions
-        predictions = []
-        for _ in range(self.num_samples):
-            logits = model(x)
-            probs = F.softmax(logits, dim=-1)
-            predictions.append(probs)
+            # Collect predictions
+            predictions = []
+            for _ in range(self.num_samples):
+                logits = model(x)
+                probs = F.softmax(logits, dim=-1)
+                predictions.append(probs)
 
-        predictions = torch.stack(predictions)  # (num_samples, batch_size, num_classes)
+            predictions = torch.stack(
+                predictions
+            )  # (num_samples, batch_size, num_classes)
 
-        # Expected entropy: E_θ[H[y|x,θ]]
-        expected_entropy = (
-            -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
-        )
+            # Expected entropy: E_θ[H[y|x,θ]]
+            expected_entropy = (
+                -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
+            )
 
-        # Entropy of mean: H[E_θ[y|x,θ]]
-        mean_probs = predictions.mean(dim=0)
-        entropy_of_mean = -(mean_probs * torch.log(mean_probs + 1e-10)).sum(dim=-1)
+            # Entropy of mean: H[E_θ[y|x,θ]]
+            mean_probs = predictions.mean(dim=0)
+            entropy_of_mean = -(mean_probs * torch.log(mean_probs + 1e-10)).sum(dim=-1)
 
-        # Mutual information (BALD score)
-        bald = entropy_of_mean - expected_entropy
+            # Mutual information (BALD score)
+            bald = entropy_of_mean - expected_entropy
 
-        model.eval()
-        return bald
+            return bald
+        finally:
+            model.train(was_training)
 
 
 class VarianceRatioAcquisition(BaseAcquisition):
@@ -225,29 +233,28 @@ class VarianceRatioAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute variance ratio scores."""
-        model.train()
+        was_training = model.training
+        try:
+            model.train()
 
-        # Collect predictions
-        predictions = []
-        for _ in range(self.num_samples):
-            logits = model(x)
-            pred_labels = logits.argmax(dim=-1)
-            predictions.append(pred_labels)
+            # Collect predictions
+            predictions = []
+            for _ in range(self.num_samples):
+                logits = model(x)
+                pred_labels = logits.argmax(dim=-1)
+                predictions.append(pred_labels)
 
-        predictions = torch.stack(predictions)  # (num_samples, batch_size)
+            predictions = torch.stack(predictions)  # (num_samples, batch_size)
 
-        # Compute mode frequency
-        batch_size = x.size(0)
-        variance_ratios = []
+            # Compute mode frequency (vectorized)
+            mode_values = torch.mode(predictions, dim=0).values  # (batch_size,)
+            mode_freq = (predictions == mode_values.unsqueeze(0)).float().sum(
+                dim=0
+            ) / self.num_samples
 
-        for i in range(batch_size):
-            sample_preds = predictions[:, i]
-            mode_count = torch.mode(sample_preds).values
-            mode_freq = (sample_preds == mode_count).sum().float() / self.num_samples
-            variance_ratios.append(1.0 - mode_freq)
-
-        model.eval()
-        return torch.tensor(variance_ratios, device=x.device)
+            return 1.0 - mode_freq
+        finally:
+            model.train(was_training)
 
 
 class MeanSTDAcquisition(BaseAcquisition):
@@ -275,33 +282,41 @@ class MeanSTDAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute mean STD scores."""
-        model.train()
+        was_training = model.training
+        try:
+            model.train()
 
-        # Collect predictions
-        predictions = []
-        for _ in range(self.num_samples):
-            logits = model(x)
-            probs = F.softmax(logits, dim=-1)
-            predictions.append(probs)
+            # Collect predictions
+            predictions = []
+            for _ in range(self.num_samples):
+                logits = model(x)
+                probs = F.softmax(logits, dim=-1)
+                predictions.append(probs)
 
-        predictions = torch.stack(predictions)  # (num_samples, batch_size, num_classes)
+            predictions = torch.stack(
+                predictions
+            )  # (num_samples, batch_size, num_classes)
 
-        # Compute standard deviation
-        std = predictions.std(dim=0)
+            # Compute standard deviation
+            std = predictions.std(dim=0)
 
-        # Average over classes
-        mean_std = std.mean(dim=-1)
+            # Average over classes
+            mean_std = std.mean(dim=-1)
 
-        model.eval()
-        return mean_std
+            return mean_std
+        finally:
+            model.train(was_training)
 
 
 class BatchBALDAcquisition(BaseAcquisition):
     """
-    BatchBALD - BALD for batch acquisition.
+    Approximate BatchBALD via individual BALD scores.
 
-    Selects batches that jointly maximize information gain,
-    accounting for redundancy between selected samples.
+    Full BatchBALD (Kirsch et al., NeurIPS 2019) greedily selects batches
+    that jointly maximise information gain by computing joint entropies.
+    This implementation returns per-sample BALD scores as a tractable
+    approximation; for true batch-aware selection, pair with a
+    diversity-aware strategy (e.g., ``DiversitySampling``).
 
     Reference:
         Kirsch et al., "BatchBALD: Efficient and Diverse Batch Acquisition
@@ -322,46 +337,47 @@ class BatchBALDAcquisition(BaseAcquisition):
         self,
         model: torch.nn.Module,
         x: torch.Tensor,
-        batch_size: int = 10,
         **kwargs,
     ) -> torch.Tensor:
         """
-        Compute BatchBALD scores.
+        Compute per-sample BALD scores as a BatchBALD approximation.
 
-        Note: This is a simplified version. Full BatchBALD requires
-        joint entropy computation which is computationally expensive.
+        Note: This is a simplified version that returns individual BALD
+        scores. Full BatchBALD requires joint entropy computation which
+        is computationally expensive. For batch-aware diversity, pair
+        with a diversity-aware strategy like ``DiversitySampling``.
 
         Args:
             model: Model
             x: Unlabeled samples
-            batch_size: Size of batch to select
 
         Returns:
-            Scores for samples
+            Per-sample BALD scores
         """
-        model.train()
+        was_training = model.training
+        try:
+            model.train()
 
-        # Collect predictions
-        predictions = []
-        for _ in range(self.num_samples):
-            logits = model(x)
-            probs = F.softmax(logits, dim=-1)
-            predictions.append(probs)
+            # Collect predictions
+            predictions = []
+            for _ in range(self.num_samples):
+                logits = model(x)
+                probs = F.softmax(logits, dim=-1)
+                predictions.append(probs)
 
-        predictions = torch.stack(predictions)
+            predictions = torch.stack(predictions)
 
-        # Compute individual BALD scores
-        expected_entropy = (
-            -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
-        )
-        mean_probs = predictions.mean(dim=0)
-        entropy_of_mean = -(mean_probs * torch.log(mean_probs + 1e-10)).sum(dim=-1)
-        bald_scores = entropy_of_mean - expected_entropy
+            # Compute individual BALD scores
+            expected_entropy = (
+                -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
+            )
+            mean_probs = predictions.mean(dim=0)
+            entropy_of_mean = -(mean_probs * torch.log(mean_probs + 1e-10)).sum(dim=-1)
+            bald_scores = entropy_of_mean - expected_entropy
 
-        # Simplified: Just return BALD scores
-        # Full BatchBALD would greedily select samples considering joint entropy
-        model.eval()
-        return bald_scores
+            return bald_scores
+        finally:
+            model.train(was_training)
 
 
 __all__ = [

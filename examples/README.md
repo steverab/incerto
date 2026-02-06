@@ -1,224 +1,102 @@
 # Incerto Examples
 
-Comprehensive examples demonstrating uncertainty quantification methods across different data modalities.
+Comprehensive Jupyter notebooks demonstrating uncertainty quantification methods.
 
-## 📁 Directory Structure
+## 📓 Interactive Notebooks
 
-```
-examples/
-├── 01_synthetic/       # Quick conceptual examples (~1 minute each)
-├── 02_tabular/         # Tabular data examples (~1-5 minutes each)
-├── 03_vision/          # Computer vision examples (~5-30 minutes each)
-│   ├── mnist/          # MNIST examples
-│   └── cifar/          # CIFAR-10 examples
-└── 04_nlp/             # Natural language processing examples
-```
+**One notebook per incerto module** - comprehensive tutorials from theory to deployment.
 
-## 🎯 Learning Paths
-
-### Path 1: Beginner (Concepts First)
-**Goal:** Understand core uncertainty concepts with simple visualizations
-
-1. **`01_synthetic/calibration_basics.py`** - What is calibration?
-2. **`01_synthetic/ood_detection_basics.py`** - What is OOD detection?
-3. **`01_synthetic/conformal_prediction.py`** - Prediction sets with guarantees
-4. **`01_synthetic/selective_prediction.py`** - When to abstain from prediction
-5. **`02_tabular/posthoc_calibration.py`** - Apply to real tabular data
-
-**Time:** ~1 hour | **Difficulty:** ⭐☆☆
-
-### Path 2: Practitioner (Real Applications)
-**Goal:** Apply methods to practical problems
-
-1. **`02_tabular/posthoc_calibration.py`** - Tabular classification
-2. **`03_vision/mnist/01_posthoc_evaluation.py`** - Image classification
-3. **`02_tabular/training_methods.py`** - Training-time improvements
-4. **`03_vision/mnist/02_training_methods.py`** - Training methods on images
-5. **`03_vision/mnist/03_ensemble_methods.py`** - Ensemble approaches
-
-**Time:** ~2-3 hours | **Difficulty:** ⭐⭐☆
-
-### Path 3: Researcher (Advanced Methods)
-**Goal:** Master cutting-edge techniques
-
-1. **`03_vision/cifar/01_posthoc_evaluation.py`** - Complex images
-2. **`03_vision/cifar/02_training_methods.py`** - Training methods
-3. **`03_vision/cifar/03_advanced_training.py`** - Evidential, focal loss
-4. **`04_nlp/llm_uncertainty.py`** - LLM uncertainty quantification
-
-**Time:** ~4-6 hours | **Difficulty:** ⭐⭐⭐
-
-## 📊 Examples by Topic
-
-### Calibration
-- ✅ `01_synthetic/calibration_basics.py` - Visualization on 2D data
-- ✅ `02_tabular/posthoc_calibration.py` - Post-hoc methods
-- ✅ `02_tabular/training_methods.py` - Label smoothing, focal loss
-- ✅ `03_vision/mnist/01_posthoc_evaluation.py` - Temperature scaling
-- ✅ `03_vision/cifar/03_advanced_training.py` - Advanced methods
-
-### OOD Detection
-- ✅ `01_synthetic/ood_detection_basics.py` - Visualization on 2D data
-- ✅ `03_vision/mnist/01_posthoc_evaluation.py` - MSP, Energy, ODIN
-- ✅ `03_vision/mnist/02_training_methods.py` - Mixup for OOD
-- ✅ `03_vision/cifar/01_posthoc_evaluation.py` - CIFAR vs SVHN
-
-### Selective Prediction
-- ✅ `01_synthetic/selective_prediction.py` - Risk-coverage curves
-- ✅ `03_vision/mnist/01_posthoc_evaluation.py` - Confidence thresholding
-- ✅ `03_vision/mnist/02_training_methods.py` - Self-Adaptive Training
-
-### Conformal Prediction
-- ✅ `01_synthetic/conformal_prediction.py` - Prediction sets
-- ✅ `03_vision/mnist/01_posthoc_evaluation.py` - Inductive CP
-
-### Ensemble Methods
-- ✅ `03_vision/mnist/03_ensemble_methods.py` - Deep ensembles vs MC Dropout
-
-### LLM Uncertainty
-- ✅ `04_nlp/llm_uncertainty.py` - Token, sequence, sampling-based methods
+| # | Notebook | Module | Description |
+|---|----------|--------|-------------|
+| 1 | `01_calibration.ipynb` | **calibration** | Confidence calibration (foundational) |
+| 2 | `02_ood_detection.ipynb` | **ood** | Out-of-distribution detection |
+| 3 | `03_selective_prediction.ipynb` | **sp** | Know when to abstain |
+| 4 | `04_conformal_prediction.ipynb` | **conformal** | Prediction sets with guarantees |
+| 5 | `05_bayesian_uncertainty.ipynb` | **bayesian** | Bayesian deep learning |
+| 6 | `06_active_learning.ipynb` | **active** | Data-efficient learning |
+| 7 | `07_shift_detection.ipynb` | **shift** | Distribution shift detection |
+| 8 | `08_llm_uncertainty.ipynb` | **llm** | LLM uncertainty |
 
 ## 🚀 Quick Start
 
-### Run Your First Example
-
 ```bash
-# Simple 2D visualization (30 seconds)
-python examples/01_synthetic/calibration_basics.py
-
-# Real dataset (1 minute)
-python examples/02_tabular/posthoc_calibration.py
-
-# Image classification (5 minutes)
-python examples/03_vision/mnist/01_posthoc_evaluation.py
-```
-
-### Requirements
-
-```bash
-# Install incerto
-pip install -e .
-
-# Or with dependencies
+# Install incerto with examples dependencies
 pip install -e ".[examples]"
+
+# Install Jupyter
+pip install jupyter
+
+# Launch notebooks
+cd examples
+jupyter notebook
 ```
 
-## 📖 Example Descriptions
+## 📚 Recommended Order
 
-### 01_synthetic/ - Toy Examples
-Perfect for understanding concepts before applying to real data.
+Follow the numbering **01 → 08** for a logical progression:
 
-| File | Description | Runtime | Key Concepts |
-|------|-------------|---------|--------------|
-| `calibration_basics.py` | 2D calibration visualization | ~30s | Temperature scaling, ECE, reliability diagrams |
-| `ood_detection_basics.py` | 2D OOD detection | ~20s | MSP, Energy scores, AUROC, score distributions |
-| `conformal_prediction.py` | Prediction sets demo | ~15s | Coverage guarantees, set sizes, efficiency |
-| `selective_prediction.py` | Risk-coverage trade-offs | ~15s | Rejection, AURC, coverage vs accuracy |
+1. **Calibration** - Foundation: make model confidence meaningful
+2. **OOD Detection** - Detect inputs outside training distribution
+3. **Selective Prediction** - Know when to abstain from prediction
+4. **Conformal Prediction** - Prediction sets with coverage guarantees
+5. **Bayesian Uncertainty** - Principled uncertainty via Bayesian methods
+6. **Active Learning** - Use uncertainty for efficient data labeling
+7. **Shift Detection** - Monitor for distribution drift in production
+8. **LLM Uncertainty** - Specialized methods for language models
 
-### 02_tabular/ - Tabular Data
-Real-world tabular classification with uncertainty.
+## 📖 Notebook Descriptions
 
-| File | Description | Runtime | Dataset |
-|------|-------------|---------|---------|
-| `posthoc_calibration.py` | Post-hoc calibration methods | ~10s | Wine (178 samples) |
-| `training_methods.py` | Training-time methods | ~30s | Breast Cancer (569 samples) |
+### `01_calibration.ipynb`
+Learn to make neural network confidence scores meaningful. Modern neural networks are often overconfident - this notebook shows how to fix that using post-hoc calibration methods like temperature scaling, Platt scaling, and isotonic regression. You'll measure calibration with ECE and MCE metrics, visualize with reliability diagrams, and learn to save/load calibrators for production use.
 
-### 03_vision/mnist/ - MNIST Examples
-Handwritten digit classification (28x28 grayscale).
+### `02_ood_detection.ipynb`
+Detect when your model receives inputs that are unlike anything it saw during training. Out-of-distribution detection is critical for safe deployment. This notebook covers MSP (Maximum Softmax Probability), Energy scores, ODIN, and Mahalanobis distance methods. Evaluate with AUROC and FPR@95TPR, and visualize score distributions to set appropriate thresholds.
 
-| File | Description | Runtime | Methods |
-|------|-------------|---------|---------|
-| `01_posthoc_evaluation.py` | Comprehensive post-hoc evaluation | ~5 min | Calibration, OOD, Selective, Conformal |
-| `02_training_methods.py` | Training method comparison | ~5 min | Baseline, Label Smoothing, Focal, Mixup, SAT |
-| `03_ensemble_methods.py` | Ensemble approaches | ~10 min | Single model, Deep Ensemble, MC Dropout |
+### `03_selective_prediction.ipynb`
+Sometimes it's better to say "I don't know" than to guess wrong. Selective prediction (also called rejection) lets your model abstain when uncertain. Learn confidence thresholding, risk-coverage trade-offs, and trained rejection methods like SelectiveNet and DeepGambler. Evaluate with AURC and risk-coverage curves.
 
-### 03_vision/cifar/ - CIFAR-10 Examples
-Natural images (32x32 RGB, 10 classes).
+### `04_conformal_prediction.ipynb`
+Get prediction sets with guaranteed coverage - if you want 90% coverage, conformal prediction delivers exactly that. This notebook covers split conformal, cross-validation+ (CV+), and Jackknife+ methods. For classification, learn APS (Adaptive Prediction Sets) and RAPS for smaller, more efficient prediction sets.
 
-| File | Description | Runtime | Architecture |
-|------|-------------|---------|--------------|
-| `01_posthoc_evaluation.py` | Post-hoc methods | ~10 min | ResNet-18 |
-| `02_training_methods.py` | Training methods | ~30 min | ResNet-18 |
-| `03_advanced_training.py` | Advanced techniques | ~30 min | Evidential, Focal, Confidence Penalty |
+### `05_bayesian_uncertainty.ipynb`
+Quantify uncertainty the principled way using Bayesian methods. Compare MC Dropout (cheap approximation), Deep Ensembles (gold standard), SWAG (efficient single model), and Laplace Approximation. Understand the difference between epistemic uncertainty (model doesn't know) and aleatoric uncertainty (inherent noise).
 
-### 04_nlp/ - NLP Examples
-Natural language processing with uncertainty.
+### `06_active_learning.ipynb`
+Label data efficiently by selecting the most informative samples. Active learning uses uncertainty to prioritize which examples to label next, dramatically reducing annotation costs. This notebook covers uncertainty sampling, BALD, entropy-based selection, diversity sampling, CoreSet, and BADGE strategies with complete training loops.
 
-| File | Description | Runtime | Model |
-|------|-------------|---------|-------|
-| `llm_uncertainty.py` | LLM uncertainty quantification | ~5 min | Qwen2.5-0.5B or similar |
+### `07_shift_detection.ipynb`
+Detect when your production data drifts away from training data. Distribution shift is a major cause of ML failures in production. Learn MMD (Maximum Mean Discrepancy), classifier-based detection, KS tests, and energy-based methods. Build monitoring dashboards to catch drift before it impacts users.
+
+### `08_llm_uncertainty.ipynb`
+Comprehensive uncertainty quantification for Large Language Models. This notebook covers 45 methods across all categories: token-level (entropy, confidence, perplexity), sequence-level (probability, normalized scores), sampling-based (self-consistency, semantic entropy), verbalized (P(True), self-evaluation), and calibration (temperature scaling, histogram binning). Essential for detecting hallucinations and building trustworthy LLM applications.
 
 ## 💡 Tips
 
-### For Learning
-1. **Start with synthetic examples** - Visualize concepts before complexity
-2. **Follow a learning path** - Structured progression
-3. **Read the code comments** - Detailed explanations throughout
-4. **Check output/** - All examples save visualizations
-
-### For Development
-1. **Use examples as templates** - Copy and modify for your use case
-2. **Check incerto.utils** - Reusable components (models, training loops)
-3. **Mix and match** - Combine methods from different examples
-4. **Contribute** - Add your own examples!
-
-### For Debugging
-1. **Reduce data size** - Use smaller subsets for faster iteration
-2. **Reduce epochs** - 2-3 epochs enough to test code
-3. **Use CPU** - Set `device = 'cpu'` if GPU unavailable
-4. **Check outputs** - Examples save results to `output/` directory
-
-## 🎨 Visualizations
-
-All examples save visualizations to the `output/` directory:
-
-```
-output/
-├── synthetic/          # 2D plots, decision boundaries
-├── tabular/            # Comparison tables, bar charts
-├── vision/
-│   ├── mnist/          # Reliability diagrams, ROC curves
-│   └── cifar/          # Training curves, distributions
-└── nlp/                # Token-level, sequence-level plots
-```
+- **MPS/CUDA support**: All notebooks auto-detect GPU (including Apple Silicon)
+- **Reduce runtime**: Lower epochs or batch size for faster iteration
+- **Experiment**: Modify parameters in cells to see effects
+- **Production patterns**: Each notebook includes save/load and deployment examples
 
 ## 📚 Further Reading
 
-- **Documentation:** [docs.incerto.ai](https://docs.incerto.ai) (TODO)
-- **API Reference:** See docstrings in `incerto/` modules
-- **Papers:** See references in individual examples
-- **Tutorials:** See `tutorials/` directory
-
-## 🤝 Contributing
-
-Have a great example? Contribute!
-
-1. Follow the existing structure
-2. Include docstring with description, runtime, concepts
-3. Save visualizations to `output/`
-4. Add entry to this README
-5. Submit PR
+- **Documentation**: [incerto.dev](https://incerto.dev)
+- **API Reference**: See docstrings in `incerto/` modules
+- **GitHub**: [github.com/steverab/incerto](https://github.com/steverab/incerto)
 
 ## ❓ Troubleshooting
 
-**Out of memory?**
-- Reduce batch size
-- Use smaller model
-- Reduce dataset size
-
-**Too slow?**
-- Use GPU if available
-- Reduce epochs
-- Use smaller dataset
-
 **Import errors?**
-- Install incerto: `pip install -e .`
-- Check dependencies: `pip install -r requirements.txt`
+```bash
+pip install -e ".[all]"
+```
 
-**Other issues?**
-- Check GitHub issues
-- Ask on Discord
-- Open new issue
+**Out of memory?**
+- Reduce batch size in notebook
+- Use CPU: set `device = "cpu"`
+
+**LLM notebook slow?**
+- Use smaller model or reduce `n_samples`
+- GPU/MPS significantly speeds up inference
 
 ---
 

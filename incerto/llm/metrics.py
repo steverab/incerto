@@ -142,7 +142,7 @@ def aur_c(
 
     # Compute area using trapezoidal rule
     coverage_normalized = coverage_points / len(sorted_correct)
-    aurc = np.trapz(risk_curve, coverage_normalized)
+    aurc = np.trapezoid(risk_curve, coverage_normalized)
 
     return float(aurc)
 
@@ -173,6 +173,9 @@ def uncertainty_auc(
 
     try:
         auc = roc_auc_score(incorrectness, uncertainties)
+        # Handle NaN (sklearn returns NaN when only one class present)
+        if np.isnan(auc):
+            auc = 0.5
     except ValueError:
         # Handle case where all predictions are correct/incorrect
         auc = 0.5
@@ -242,28 +245,38 @@ def f1_score_tokens(
     """
     Compute precision, recall, and F1 at token level.
 
+    This treats token prediction as a retrieval problem where:
+    - True Positive: correct token at a valid (masked-in) position
+    - False Positive: wrong token at a valid position
+    - False Negative: true token at a masked-out position (not predicted)
+
+    When mask covers all positions (default), FN=0 and recall=1.0,
+    making F1 equal to 2*precision/(1+precision). In this case,
+    consider using token_level_accuracy() instead.
+
     Args:
         pred_tokens: Predicted token IDs (batch, seq_len)
         true_tokens: True token IDs (batch, seq_len)
-        mask: Optional mask for valid positions
+        mask: Optional mask for valid positions. Positions where mask=0
+              contribute to false negatives (tokens that should have
+              been predicted but weren't).
 
     Returns:
-        Dictionary with precision, recall, F1
+        Dictionary with precision, recall, F1, and token counts
     """
     if mask is None:
         mask = torch.ones_like(pred_tokens, dtype=torch.bool)
     else:
         mask = mask.bool()
 
-    # True positives
+    # True positives: correct predictions at valid positions
     tp = ((pred_tokens == true_tokens) & mask).sum().item()
 
-    # False positives (predicted but wrong)
+    # False positives: wrong predictions at valid positions
     fp = ((pred_tokens != true_tokens) & mask).sum().item()
 
-    # False negatives (should predict but didn't)
-    # In token prediction, this is the same as FP
-    fn = fp
+    # False negatives: true tokens at masked-out positions (not evaluated)
+    fn = (~mask).sum().item()
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -277,4 +290,7 @@ def f1_score_tokens(
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "tp": int(tp),
+        "fp": int(fp),
+        "fn": int(fn),
     }

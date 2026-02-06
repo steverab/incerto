@@ -134,11 +134,10 @@ class TestCalibratorRepr:
 
     def test_beta_calibrator_repr(self):
         """Test BetaCalibrator __repr__."""
-        calibrator = BetaCalibrator(method="mle")
+        calibrator = BetaCalibrator()
 
         repr_str = repr(calibrator)
         assert "BetaCalibrator" in repr_str
-        assert "method" in repr_str
 
 
 # ============================================================================

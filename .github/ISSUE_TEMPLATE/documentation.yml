@@ -1,0 +1,47 @@
+name: Documentation Issue
+description: Report an issue with documentation or suggest improvements
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve the documentation!
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What kind of documentation issue is this?
+      options:
+        - Typo or grammatical error
+        - Incorrect or outdated information
+        - Missing documentation
+        - Unclear explanation
+        - Missing example
+        - Broken link
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Where is the issue? (URL, file path, or section name)
+      placeholder: https://incerto.dev/docs/... or README.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the issue or improvement.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Change
+      description: If applicable, describe what the documentation should say.

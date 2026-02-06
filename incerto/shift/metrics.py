@@ -33,7 +33,11 @@ def population_stability_index(p_hist, q_hist, eps: float = 1e-9) -> float:
 
 
 def wasserstein_distance(
-    x: torch.Tensor, y: torch.Tensor, p: float = 2.0, max_iter: int = 100
+    x: torch.Tensor,
+    y: torch.Tensor,
+    p: float = 2.0,
+    max_iter: int = 100,
+    epsilon: float | None = None,
 ) -> float:
     """
     Wasserstein distance (Earth Mover's Distance) between two empirical distributions.
@@ -46,6 +50,9 @@ def wasserstein_distance(
         y: Target samples of shape (m, d)
         p: Order of the Wasserstein distance (default: 2.0 for W2 distance)
         max_iter: Maximum iterations for Sinkhorn algorithm
+        epsilon: Entropy regularization parameter for Sinkhorn. If None (default),
+            automatically scaled based on the cost matrix median to avoid numerical
+            issues. Smaller values give more accurate results but may cause underflow.
 
     Returns:
         Wasserstein distance between the two distributions
@@ -91,12 +98,17 @@ def wasserstein_distance(
     # Compute cost matrix (pairwise distances)
     C = torch.cdist(x, y, p=p) ** p
 
+    # Auto-scale epsilon if not provided to avoid numerical issues
+    # Use median of cost matrix as a robust scale estimate
+    if epsilon is None:
+        epsilon = float(C.median()) * 0.05
+        epsilon = max(epsilon, 1e-3)  # Ensure minimum regularization
+
     # Uniform distribution over samples
     a = torch.ones(n, device=x.device) / n
     b = torch.ones(m, device=y.device) / m
 
     # Sinkhorn iterations with entropy regularization
-    epsilon = 0.1  # regularization parameter
     K = torch.exp(-C / epsilon)
 
     u = torch.ones(n, device=x.device) / n
@@ -132,7 +144,7 @@ def sliced_wasserstein_distance(
         y: Target samples of shape (m, d)
         num_projections: Number of random projections (default: 100)
         p: Order of the Wasserstein distance (default: 2.0)
-        seed: Random seed for reproducibility
+        seed: Random seed for reproducibility (does not affect global state)
 
     Returns:
         Sliced Wasserstein distance averaged over random projections
@@ -147,15 +159,17 @@ def sliced_wasserstein_distance(
         >>> target_features = model(target_data)
         >>> distance = sliced_wasserstein_distance(source_features, target_features)
     """
+    # Use a local Generator to avoid modifying global random state
+    generator = torch.Generator(device=x.device)
     if seed is not None:
-        torch.manual_seed(seed)
+        generator.manual_seed(seed)
 
     d = x.shape[1]
     distances = []
 
     for _ in range(num_projections):
         # Random projection direction
-        theta = torch.randn(d, device=x.device)
+        theta = torch.randn(d, device=x.device, generator=generator)
         theta = theta / torch.norm(theta)
 
         # Project samples onto theta

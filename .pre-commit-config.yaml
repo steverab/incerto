@@ -1,10 +1,13 @@
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/psf/black
-    rev: 25.1.0          # latest stable as of Jan 29 2025 :contentReference[oaicite:0]{index=0}
+    rev: 25.1.0
     hooks:
       - id: black
-        # pick the interpreter your project targets
         language_version: python3.10
-        # optional Black flags, e.g. line length:
-        # args: ["--line-length", "100"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.10
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]

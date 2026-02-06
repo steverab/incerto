@@ -41,6 +41,7 @@ from .metrics import (
     mce_score,
     classwise_ece,
     adaptive_ece_score,
+    smooth_ece,
 )
 
 # Visualization
@@ -48,6 +49,7 @@ from .visual import (
     plot_reliability_diagram,
     plot_confidence_histogram,
     plot_calibration_curve,
+    plot_smooth_reliability_diagram,
 )
 
 # Utilities
@@ -84,10 +86,12 @@ __all__ = [
     "mce_score",
     "classwise_ece",
     "adaptive_ece_score",
+    "smooth_ece",
     # Visual
     "plot_reliability_diagram",
     "plot_confidence_histogram",
     "plot_calibration_curve",
+    "plot_smooth_reliability_diagram",
     # Utils
     "get_bin_stats",
     "extract_confidences_and_predictions",

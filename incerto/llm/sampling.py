@@ -184,8 +184,8 @@ class MutualInformation:
     """
     Mutual information between predictions and model (aleatoric vs epistemic).
 
-    MI = E[H(y|x, θ)] - H(E[y|x, θ])
-       = Expected entropy - Entropy of expected distribution
+    MI = H(E[y|x, θ]) - E[H(y|x, θ)]
+       = Entropy of expected distribution - Expected entropy
 
     High MI indicates epistemic uncertainty (model uncertainty).
     """
@@ -216,8 +216,8 @@ class MutualInformation:
         log_mean_probs = torch.log(mean_probs + 1e-10)
         entropy_of_expected = -(mean_probs * log_mean_probs).sum(dim=-1)
 
-        # Mutual information
-        mi = expected_entropy - entropy_of_expected
+        # Mutual information: H[E[p]] - E[H[p]]
+        mi = entropy_of_expected - expected_entropy
 
         return mi
 

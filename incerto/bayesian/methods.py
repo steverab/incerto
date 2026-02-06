@@ -6,15 +6,56 @@ in neural networks.
 """
 
 from __future__ import annotations
-from typing import List, Optional, Callable, Tuple
+from abc import ABC, abstractmethod
+from typing import List, Optional, Callable, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import copy
 
 
-class MCDropout(nn.Module):
+class BaseBayesianMethod(nn.Module, ABC):
+    """
+    Abstract base class for Bayesian deep learning methods.
+
+    All Bayesian methods produce uncertainty estimates by maintaining or
+    sampling from a distribution over model parameters (or predictions).
+    They follow a common interface:
+
+    - ``predict(x, return_samples=False)`` returns ``(mean, variance)``
+      or ``(mean, variance, samples)`` when ``return_samples=True``.
+
+    The returned variance captures **epistemic** (model) uncertainty —
+    disagreement between posterior samples.  Aleatoric (data) uncertainty
+    is not directly modelled by this interface.
+    """
+
+    @abstractmethod
+    def predict(
+        self,
+        x: torch.Tensor,
+        return_samples: bool = False,
+        **kwargs,
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
+        """
+        Prediction with uncertainty estimation.
+
+        Args:
+            x: Input tensor.
+            return_samples: If True, also return individual samples/predictions.
+
+        Returns:
+            ``(mean, variance)`` or ``(mean, variance, samples)`` when
+            *return_samples* is True.  Variance is computed as disagreement
+            across posterior samples and captures epistemic (model) uncertainty.
+        """
+        ...
+
+
+class MCDropout(BaseBayesianMethod):
     """
     Monte Carlo Dropout for uncertainty estimation.
 
@@ -50,10 +91,23 @@ class MCDropout(nn.Module):
         self._enable_dropout()
 
     def _enable_dropout(self):
-        """Enable dropout at test time."""
+        """Enable dropout at test time and optionally set dropout rate."""
+        found = False
         for module in self.model.modules():
             if isinstance(module, nn.Dropout):
                 module.train()
+                # Override dropout rate if specified
+                if self.dropout_rate is not None:
+                    module.p = self.dropout_rate
+                found = True
+        if not found:
+            import warnings
+
+            warnings.warn(
+                "MCDropout: no nn.Dropout layers found in the model. "
+                "All forward samples will be identical, yielding zero variance.",
+                stacklevel=2,
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Single forward pass (for training)."""
@@ -64,12 +118,15 @@ class MCDropout(nn.Module):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Monte Carlo prediction with uncertainty estimation.
 
         Args:
-            x: Input tensor (N, *)
+            x: Input tensor ``(N, ...)``
             return_samples: If True, return all MC samples
 
         Returns:
@@ -138,7 +195,7 @@ class MCDropout(nn.Module):
         return mutual_info
 
 
-class DeepEnsemble(nn.Module):
+class DeepEnsemble(BaseBayesianMethod):
     """
     Deep Ensembles for uncertainty quantification.
 
@@ -195,19 +252,28 @@ class DeepEnsemble(nn.Module):
     def predict(
         self,
         x: torch.Tensor,
+        return_samples: bool = False,
         return_all: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Ensemble prediction with uncertainty.
 
         Args:
-            x: Input tensor (N, *)
-            return_all: If True, return all individual predictions
+            x: Input tensor ``(N, ...)``
+            return_samples: If True, return all individual predictions
+            return_all: Deprecated alias for return_samples
 
         Returns:
-            Tuple of (mean_prediction, predictive_variance)
-            If return_all=True: (mean, variance, all_predictions)
+            Tuple of (mean_prediction, epistemic_variance).
+            Variance is computed as disagreement across ensemble members
+            and captures epistemic (model) uncertainty.
+            If return_samples=True: (mean, variance, all_predictions)
         """
+        _return = return_samples or return_all
+
         predictions = []
         for model in self.models:
             model.eval()
@@ -222,7 +288,7 @@ class DeepEnsemble(nn.Module):
         mean = predictions.mean(dim=0)
         variance = predictions.var(dim=0)
 
-        if return_all:
+        if _return:
             return mean, variance, predictions
         return mean, variance
 
@@ -272,11 +338,11 @@ class DeepEnsemble(nn.Module):
         Returns:
             Per-sample diversity score
         """
-        _, variance, _ = self.predict(x, return_all=True)
+        _, variance, _ = self.predict(x, return_samples=True)
         return variance.mean(dim=-1)
 
 
-class SWAG(nn.Module):
+class SWAG(BaseBayesianMethod):
     """
     Stochastic Weight Averaging - Gaussian (SWAG).
 
@@ -291,8 +357,12 @@ class SWAG(nn.Module):
     Args:
         model: Base neural network
         num_samples: Number of samples for prediction (default: 20)
-        max_models: Maximum number of models to store (default: 20)
         var_clamp: Variance clamping value (default: 1e-6)
+
+    Note:
+        This is a diagonal SWAG implementation. The full SWAG algorithm
+        also includes a low-rank covariance component, which is not
+        implemented here for simplicity and memory efficiency.
 
     Example:
         >>> model = ResNet18(num_classes=10)
@@ -308,19 +378,16 @@ class SWAG(nn.Module):
         self,
         model: nn.Module,
         num_samples: int = 20,
-        max_models: int = 20,
         var_clamp: float = 1e-6,
     ):
         super().__init__()
         self.model = model
         self.num_samples = num_samples
-        self.max_models = max_models
         self.var_clamp = var_clamp
 
-        # Statistics for SWAG
+        # Statistics for diagonal SWAG
         self.mean = {}
         self.sq_mean = {}
-        self.cov_mat_sqrt = {}
         self.n_models = 0
 
         # Initialize statistics
@@ -372,22 +439,58 @@ class SWAG(nn.Module):
 
         return sampled_params
 
+    def state_dict(self) -> dict:
+        """
+        Return state dictionary for serialization.
+
+        Returns:
+            State dictionary containing model state and SWAG statistics.
+        """
+        state = super().state_dict()
+        state["_swag_mean"] = self.mean
+        state["_swag_sq_mean"] = self.sq_mean
+        state["_swag_n_models"] = self.n_models
+        return state
+
+    def load_state_dict(self, state_dict: dict, strict: bool = True):
+        """
+        Load state dictionary.
+
+        Args:
+            state_dict: State dictionary to load.
+            strict: Whether to strictly enforce key matching.
+        """
+        # Extract SWAG-specific state
+        self.mean = state_dict.pop("_swag_mean", {})
+        self.sq_mean = state_dict.pop("_swag_sq_mean", {})
+        self.n_models = state_dict.pop("_swag_n_models", 0)
+        # Load remaining state (model parameters)
+        super().load_state_dict(state_dict, strict=strict)
+
     @torch.no_grad()
     def predict(
         self,
         x: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return_samples: bool = False,
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         SWAG prediction with uncertainty.
 
         Args:
-            x: Input tensor (N, *)
+            x: Input tensor ``(N, ...)``
+            return_samples: If True, return all sampled predictions
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
+            If return_samples=True: (mean, variance, samples)
         """
         if self.n_models == 0:
-            raise RuntimeError("No models collected. Call collect_model() first.")
+            from ..exceptions import NotFittedError
+
+            raise NotFittedError("No models collected. Call collect_model() first.")
 
         predictions = []
 
@@ -396,32 +499,35 @@ class SWAG(nn.Module):
             name: param.data.clone() for name, param in self.model.named_parameters()
         }
 
-        # Sample and predict
-        for _ in range(self.num_samples):
-            sampled_params = self.sample_parameters()
+        try:
+            # Sample and predict
+            for _ in range(self.num_samples):
+                sampled_params = self.sample_parameters()
 
-            # Load sampled parameters
+                # Load sampled parameters
+                for name, param in self.model.named_parameters():
+                    param.data = sampled_params[name]
+
+                # Forward pass
+                output = self.model(x)
+                if output.dim() == 2 and output.size(-1) > 1:
+                    output = F.softmax(output, dim=-1)
+                predictions.append(output)
+        finally:
+            # Restore original parameters even if forward pass fails
             for name, param in self.model.named_parameters():
-                param.data = sampled_params[name]
-
-            # Forward pass
-            output = self.model(x)
-            if output.dim() == 2 and output.size(-1) > 1:
-                output = F.softmax(output, dim=-1)
-            predictions.append(output)
-
-        # Restore original parameters
-        for name, param in self.model.named_parameters():
-            param.data = original_params[name]
+                param.data = original_params[name]
 
         predictions = torch.stack(predictions)
         mean = predictions.mean(dim=0)
         variance = predictions.var(dim=0)
 
+        if return_samples:
+            return mean, variance, predictions
         return mean, variance
 
 
-class LaplaceApproximation(nn.Module):
+class LaplaceApproximation(BaseBayesianMethod):
     """
     Laplace Approximation for Bayesian Neural Networks.
 
@@ -470,7 +576,7 @@ class LaplaceApproximation(nn.Module):
         device: str = "cuda",
     ) -> dict:
         """
-        Compute diagonal of Hessian (simplified Laplace).
+        Compute diagonal of the empirical Fisher (GGN approximation).
 
         Args:
             data_loader: Data loader for computing Hessian
@@ -491,32 +597,25 @@ class LaplaceApproximation(nn.Module):
         for batch_x, batch_y in data_loader:
             batch_x, batch_y = batch_x.to(device), batch_y.to(device)
 
+            # Zero gradients before forward pass
+            self.model.zero_grad()
+
             # Forward pass
             outputs = self.model(batch_x)
 
             if self.likelihood == "classification":
-                probs = F.softmax(outputs, dim=-1)
-                # For classification: diagonal of Hessian is p(1-p)
-                for name, param in self.model.named_parameters():
-                    if param.grad is not None:
-                        param.grad.zero_()
-
-                # Compute gradient for each output
+                # Compute gradient of cross-entropy loss
                 loss = F.cross_entropy(outputs, batch_y)
-                loss.backward()
-
-                for name, param in self.model.named_parameters():
-                    if param.grad is not None:
-                        hessian_diag[name] += param.grad.data**2
-
             else:  # regression
                 # For regression with Gaussian likelihood
                 loss = F.mse_loss(outputs.squeeze(), batch_y.float())
-                loss.backward()
 
-                for name, param in self.model.named_parameters():
-                    if param.grad is not None:
-                        hessian_diag[name] += param.grad.data**2
+            loss.backward()
+
+            # Accumulate squared gradients (Fisher diagonal approximation)
+            for name, param in self.model.named_parameters():
+                if param.grad is not None:
+                    hessian_diag[name] += param.grad.data**2
 
         # Average over dataset
         num_batches = len(data_loader)
@@ -550,18 +649,26 @@ class LaplaceApproximation(nn.Module):
     def predict(
         self,
         x: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return_samples: bool = False,
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Laplace prediction with uncertainty.
 
         Args:
-            x: Input tensor (N, *)
+            x: Input tensor ``(N, ...)``
+            return_samples: If True, return all sampled predictions
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
+            If return_samples=True: (mean, variance, samples)
         """
         if self.mean is None:
-            raise RuntimeError("Model not fitted. Call fit() first.")
+            from ..exceptions import NotFittedError
+
+            raise NotFittedError("Model not fitted. Call fit() first.")
 
         predictions = []
 
@@ -570,30 +677,65 @@ class LaplaceApproximation(nn.Module):
             name: param.data.clone() for name, param in self.model.named_parameters()
         }
 
-        # Sample from posterior
-        for _ in range(self.num_samples):
+        try:
+            # Sample from posterior
+            for _ in range(self.num_samples):
+                for name, param in self.model.named_parameters():
+                    # Sample from Gaussian posterior
+                    std = 1.0 / torch.sqrt(self.posterior_precision[name])
+                    param.data = self.mean[name] + torch.randn_like(std) * std
+
+                output = self.model(x)
+                if output.dim() == 2 and output.size(-1) > 1:
+                    output = F.softmax(output, dim=-1)
+                predictions.append(output)
+        finally:
+            # Restore original parameters even if forward pass fails
             for name, param in self.model.named_parameters():
-                # Sample from Gaussian posterior
-                std = 1.0 / torch.sqrt(self.posterior_precision[name])
-                param.data = self.mean[name] + torch.randn_like(std) * std
-
-            output = self.model(x)
-            if output.dim() == 2 and output.size(-1) > 1:
-                output = F.softmax(output, dim=-1)
-            predictions.append(output)
-
-        # Restore original parameters
-        for name, param in self.model.named_parameters():
-            param.data = original_params[name]
+                param.data = original_params[name]
 
         predictions = torch.stack(predictions)
         mean = predictions.mean(dim=0)
         variance = predictions.var(dim=0)
 
+        if return_samples:
+            return mean, variance, predictions
         return mean, variance
 
+    def state_dict(self) -> dict:
+        """
+        Return state dictionary for serialization.
 
-class VariationalBayesNN(nn.Module):
+        Returns:
+            State dictionary containing model state and Laplace statistics.
+        """
+        state = super().state_dict()
+        state["_laplace_mean"] = self.mean
+        state["_laplace_posterior_precision"] = self.posterior_precision
+        state["_laplace_likelihood"] = self.likelihood
+        state["_laplace_prior_precision"] = self.prior_precision
+        state["_laplace_num_samples"] = self.num_samples
+        return state
+
+    def load_state_dict(self, state_dict: dict, strict: bool = True):
+        """
+        Load state dictionary.
+
+        Args:
+            state_dict: State dictionary to load.
+            strict: Whether to strictly enforce key matching.
+        """
+        # Extract Laplace-specific state
+        self.mean = state_dict.pop("_laplace_mean", None)
+        self.posterior_precision = state_dict.pop("_laplace_posterior_precision", None)
+        self.likelihood = state_dict.pop("_laplace_likelihood", "classification")
+        self.prior_precision = state_dict.pop("_laplace_prior_precision", 1.0)
+        self.num_samples = state_dict.pop("_laplace_num_samples", 20)
+        # Load remaining state (model parameters)
+        super().load_state_dict(state_dict, strict=strict)
+
+
+class VariationalBayesNN(BaseBayesianMethod):
     """
     Variational Bayesian Neural Network (Bayes by Backprop).
 
@@ -608,6 +750,7 @@ class VariationalBayesNN(nn.Module):
         hidden_sizes: List of hidden layer sizes
         out_features: Output dimension
         prior_std: Prior standard deviation (default: 1.0)
+        num_samples: Number of MC samples for prediction (default: 20)
 
     Example:
         >>> model = VariationalBayesNN(784, [512, 256], 10)
@@ -624,9 +767,11 @@ class VariationalBayesNN(nn.Module):
         hidden_sizes: List[int],
         out_features: int,
         prior_std: float = 1.0,
+        num_samples: int = 20,
     ):
         super().__init__()
         self.prior_std = prior_std
+        self.num_samples = num_samples
 
         # Build network with Gaussian weights
         layers = []
@@ -693,20 +838,24 @@ class VariationalBayesNN(nn.Module):
     def predict(
         self,
         x: torch.Tensor,
-        num_samples: int = 20,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        return_samples: bool = False,
+    ) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
         """
         Variational prediction with uncertainty.
 
         Args:
             x: Input tensor
-            num_samples: Number of MC samples
+            return_samples: If True, return all sampled predictions
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
+            If return_samples=True: (mean, variance, samples)
         """
         predictions = []
-        for _ in range(num_samples):
+        for _ in range(self.num_samples):
             output = self.forward(x)
             if output.dim() == 2 and output.size(-1) > 1:
                 output = F.softmax(output, dim=-1)
@@ -716,6 +865,8 @@ class VariationalBayesNN(nn.Module):
         mean = predictions.mean(dim=0)
         variance = predictions.var(dim=0)
 
+        if return_samples:
+            return mean, variance, predictions
         return mean, variance
 
 
@@ -737,20 +888,30 @@ class GaussianLinear(nn.Module):
         self.out_features = out_features
         self.prior_std = prior_std
 
-        # Variational parameters
-        self.weight_mu = nn.Parameter(torch.randn(out_features, in_features) * 0.1)
-        self.weight_rho = nn.Parameter(torch.randn(out_features, in_features) * 0.1)
-        self.bias_mu = nn.Parameter(torch.randn(out_features) * 0.1)
-        self.bias_rho = nn.Parameter(torch.randn(out_features) * 0.1)
+        # Initialize rho such that softplus(rho) ≈ prior_std
+        # This ensures initial KL ≈ 0 (posterior matches prior)
+        # inverse_softplus(x) = log(exp(x) - 1)
+        init_rho = torch.log(torch.tensor(prior_std).exp() - 1).item()
+
+        # Variational parameters - initialize mu from prior N(0, prior_std)
+        # This ensures initial KL ≈ 0 since posterior = prior at initialization
+        self.weight_mu = nn.Parameter(
+            torch.randn(out_features, in_features) * prior_std
+        )
+        self.weight_rho = nn.Parameter(
+            torch.full((out_features, in_features), init_rho)
+        )
+        self.bias_mu = nn.Parameter(torch.zeros(out_features))
+        self.bias_rho = nn.Parameter(torch.full((out_features,), init_rho))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass with sampled weights."""
-        # Sample weights
-        weight_std = torch.log1p(torch.exp(self.weight_rho))
+        # Sample weights (softplus is numerically stable for large rho)
+        weight_std = F.softplus(self.weight_rho)
         weight = self.weight_mu + weight_std * torch.randn_like(weight_std)
 
         # Sample bias
-        bias_std = torch.log1p(torch.exp(self.bias_rho))
+        bias_std = F.softplus(self.bias_rho)
         bias = self.bias_mu + bias_std * torch.randn_like(bias_std)
 
         return F.linear(x, weight, bias)
@@ -758,7 +919,7 @@ class GaussianLinear(nn.Module):
     def kl_divergence(self) -> torch.Tensor:
         """KL divergence between posterior and prior."""
         # Weight KL
-        weight_std = torch.log1p(torch.exp(self.weight_rho))
+        weight_std = F.softplus(self.weight_rho)
         weight_kl = (
             torch.log(self.prior_std / weight_std)
             + (weight_std**2 + self.weight_mu**2) / (2 * self.prior_std**2)
@@ -766,7 +927,7 @@ class GaussianLinear(nn.Module):
         ).sum()
 
         # Bias KL
-        bias_std = torch.log1p(torch.exp(self.bias_rho))
+        bias_std = F.softplus(self.bias_rho)
         bias_kl = (
             torch.log(self.prior_std / bias_std)
             + (bias_std**2 + self.bias_mu**2) / (2 * self.prior_std**2)
@@ -777,6 +938,7 @@ class GaussianLinear(nn.Module):
 
 
 __all__ = [
+    "BaseBayesianMethod",
     "MCDropout",
     "DeepEnsemble",
     "SWAG",

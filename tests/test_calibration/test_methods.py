@@ -9,7 +9,6 @@ All calibrators:
 
 import pytest
 import torch
-import numpy as np
 
 from incerto.calibration import (
     IdentityCalibrator,
@@ -22,6 +21,7 @@ from incerto.calibration import (
     DirichletCalibrator,
     BetaCalibrator,
 )
+from incerto.exceptions import NotFittedError
 
 
 class TestIdentityCalibrator:
@@ -567,8 +567,11 @@ class TestBetaCalibrator:
 
         calibrator.fit(logits, labels)
 
-        # Should have fitted calibrator
-        assert calibrator.calibrator is not None
+        # Should have fitted Beta parameters
+        assert calibrator.a is not None
+        assert calibrator.b is not None
+        assert calibrator.c is not None
+        assert calibrator.is_binary is True
 
     def test_predict_shape_binary(self):
         """Test predict preserves shape for binary classification."""
@@ -619,3 +622,28 @@ class TestBetaCalibrator:
         assert probs.shape == calibration_split["val_logits"].shape
         assert (probs >= 0).all() and (probs <= 1).all()
         assert torch.allclose(probs.sum(dim=1), torch.ones(probs.shape[0]), atol=1e-5)
+
+
+class TestNotFittedError:
+    """Test that predict() before fit() raises NotFittedError."""
+
+    def test_isotonic_not_fitted(self, multiclass_logits):
+        calibrator = IsotonicRegressionCalibrator()
+        with pytest.raises(NotFittedError):
+            calibrator.predict(multiclass_logits)
+
+    def test_histogram_not_fitted(self, multiclass_logits):
+        calibrator = HistogramBinningCalibrator()
+        with pytest.raises(NotFittedError):
+            calibrator.predict(multiclass_logits)
+
+    def test_platt_not_fitted(self, multiclass_logits):
+        calibrator = PlattScalingCalibrator()
+        with pytest.raises(NotFittedError):
+            calibrator.predict(multiclass_logits)
+
+    def test_beta_not_fitted(self):
+        calibrator = BetaCalibrator()
+        logits = torch.randn(10, 2)
+        with pytest.raises(NotFittedError):
+            calibrator.predict(logits)

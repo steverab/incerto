@@ -6,7 +6,6 @@ from the language model through natural language.
 """
 
 from __future__ import annotations
-from typing import Callable
 import re
 
 
@@ -33,8 +32,8 @@ class VerbalizedConfidence:
         patterns = [
             r"(\d+(?:\.\d+)?)\s*%",  # 85%
             r"(\d+(?:\.\d+)?)\s*percent",  # 85 percent
+            r"(\d+(?:\.\d+)?)\s*/\s*100",  # 85/100
             r"confidence.*?(\d+(?:\.\d+)?)",  # confidence: 85
-            r"(\d+(?:\.\d+)?)(?:/100)?",  # 85 or 85/100
         ]
 
         for pattern in patterns:

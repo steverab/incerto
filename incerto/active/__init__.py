@@ -12,6 +12,7 @@ Submodules:
 
 # Acquisition functions
 from .acquisition import (
+    BaseAcquisition,
     RandomAcquisition,
     EntropyAcquisition,
     LeastConfidenceAcquisition,
@@ -36,10 +37,13 @@ from .utils import (
     split_labeled_unlabeled,
     compute_diversity_penalty,
     greedy_k_center,
+    subsample_for_efficiency,
+    active_learning_loop,
 )
 
 __all__ = [
     # Acquisition functions
+    "BaseAcquisition",
     "RandomAcquisition",
     "EntropyAcquisition",
     "LeastConfidenceAcquisition",
@@ -58,4 +62,6 @@ __all__ = [
     "split_labeled_unlabeled",
     "compute_diversity_penalty",
     "greedy_k_center",
+    "subsample_for_efficiency",
+    "active_learning_loop",
 ]

@@ -8,7 +8,6 @@ post-hoc after training is complete.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 
 class LabelSmoothingLoss(nn.Module):
@@ -299,7 +298,7 @@ class TemperatureAwareTraining(nn.Module):
             return logits
 
         # Apply temperature scaling
-        scaled_logits = logits / self.temperature
+        scaled_logits = logits / self.temperature.clamp(min=1e-4)
         return scaled_logits
 
 
