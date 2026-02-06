@@ -40,4 +40,3 @@ Decisions and corrective steps will be communicated to the reporter and the pers
 
 ## Attribution and updates
 This code of conduct may be updated by the maintainers. Changes will be announced in repository communication channels. Contributors are encouraged to raise concerns or suggestions about the policy by contacting the maintainers.
-
