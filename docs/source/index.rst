@@ -101,6 +101,7 @@ Documentation Contents
    guide/overview
    guide/installation
    guide/quickstart
+   guide/method_selection
    guide/calibration
    guide/ood
    guide/conformal

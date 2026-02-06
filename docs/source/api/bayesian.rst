@@ -13,11 +13,13 @@ Methods
    :toctree: _autosummary
    :recursive:
 
+   BaseBayesianMethod
    MCDropout
    DeepEnsemble
    SWAG
    LaplaceApproximation
-   VariationalInference
+   VariationalBayesNN
+   GaussianLinear
 
 Metrics
 -------
@@ -26,10 +28,13 @@ Metrics
    :toctree: _autosummary
    :recursive:
 
-   predictive_entropy
-   mutual_information
-   expected_pairwise_kl
+   ensemble_diversity
+   uncertainty_quality
    disagreement
+   negative_log_likelihood
+   brier_score
+   predictive_log_likelihood
+   sharpness
 
 Utilities
 ---------
@@ -38,4 +43,10 @@ Utilities
    :toctree: _autosummary
    :recursive:
 
+   predictive_entropy
+   mutual_information
+   expected_calibration_error
    decompose_uncertainty
+   compute_disagreement
+   sample_from_posterior
+   ensemble_predictions_to_distribution

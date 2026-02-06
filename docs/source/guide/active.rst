@@ -25,8 +25,10 @@ Core Idea
 Acquisition Functions
 ---------------------
 
-Uncertainty Sampling
-^^^^^^^^^^^^^^^^^^^^
+Acquisition functions score how informative each unlabeled sample is.
+
+Entropy Acquisition
+^^^^^^^^^^^^^^^^^^^
 
 **Best for**: Starting point, simple and effective
 
@@ -34,69 +36,50 @@ Query samples where model is most uncertain:
 
 .. code-block:: python
 
-   from incerto.active import entropy_acquisition, UncertaintySampling
+   from incerto.active import EntropyAcquisition, UncertaintySampling
 
+   # Create acquisition function
+   acquisition = EntropyAcquisition()
+
+   # Use with uncertainty sampling strategy
    strategy = UncertaintySampling(
-       model,
-       acquisition_fn=entropy_acquisition
+       acquisition_fn=acquisition,
+       batch_size=100
    )
 
    # Query most uncertain samples
-   query_indices = strategy.query(
-       unlabeled_pool,
-       n_samples=100
-   )
+   query_indices = strategy.query(model, unlabeled_data)
 
    # Label these samples
-   labeled_samples = label_samples(unlabeled_pool[query_indices])
-
-**Variants**:
-   - Least confidence: Query samples with lowest max probability
-   - Margin sampling: Query samples with smallest difference between top-2 classes
-   - Entropy: Query samples with highest entropy
-
-Entropy Acquisition
-^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   from incerto.active import entropy_acquisition
-
-   # Compute entropy for each sample
-   logits = model(unlabeled_data)
-   probs = F.softmax(logits, dim=-1)
-   entropy_scores = entropy_acquisition(probs)
-
-   # Higher entropy = more uncertain = higher priority
-   top_k_indices = torch.argsort(entropy_scores, descending=True)[:k]
+   samples_to_label = unlabeled_data[query_indices]
 
 Least Confidence
 ^^^^^^^^^^^^^^^^
 
+Query samples where model is least confident in its prediction:
+
 .. code-block:: python
 
-   from incerto.active import least_confidence_acquisition
+   from incerto.active import LeastConfidenceAcquisition, UncertaintySampling
 
-   logits = model(unlabeled_data)
-   probs = F.softmax(logits, dim=-1)
-   confidence_scores = least_confidence_acquisition(probs)
+   acquisition = LeastConfidenceAcquisition()
+   strategy = UncertaintySampling(acquisition, batch_size=100)
 
-   # Lower confidence = higher priority
-   top_k_indices = torch.argsort(confidence_scores)[:k]
+   query_indices = strategy.query(model, unlabeled_data)
 
 Margin Sampling
 ^^^^^^^^^^^^^^^
 
+Query samples with smallest margin between top-2 predictions:
+
 .. code-block:: python
 
-   from incerto.active import margin_acquisition
+   from incerto.active import MarginAcquisition, UncertaintySampling
 
-   logits = model(unlabeled_data)
-   probs = F.softmax(logits, dim=-1)
-   margin_scores = margin_acquisition(probs)
+   acquisition = MarginAcquisition()
+   strategy = UncertaintySampling(acquisition, batch_size=100)
 
-   # Smaller margin = more uncertain = higher priority
-   top_k_indices = torch.argsort(margin_scores)[:k]
+   query_indices = strategy.query(model, unlabeled_data)
 
 BALD (Bayesian Active Learning by Disagreement)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -107,27 +90,85 @@ Query samples with highest mutual information:
 
 .. code-block:: python
 
-   from incerto.active import BALDAcquisition
-   from incerto.bayesian import MCDropout
+   from incerto.active import BALDAcquisition, UncertaintySampling
 
-   # Use MC Dropout for Bayesian uncertainty
-   mc_dropout = MCDropout(model, n_samples=10)
+   # BALD uses multiple forward passes for MC Dropout
+   acquisition = BALDAcquisition(num_samples=10)
+   strategy = UncertaintySampling(acquisition, batch_size=100)
 
-   strategy = BALDAcquisition(mc_dropout)
-   query_indices = strategy.query(unlabeled_pool, n_samples=100)
+   # Model should have dropout enabled
+   query_indices = strategy.query(model, unlabeled_data)
 
 **Intuition**: Query where model weights disagree most (high epistemic uncertainty)
 
-**Advantages**:
-   - Theoretically motivated
-   - Considers model uncertainty
-   - Often outperforms entropy
-
-**Disadvantages**:
-   - Requires Bayesian model
-   - More computationally expensive
-
 **Reference**: Houlsby et al., "Bayesian Active Learning for Classification" (AIStats 2011)
+
+Query Strategies
+----------------
+
+Uncertainty Sampling
+^^^^^^^^^^^^^^^^^^^^
+
+Simple top-k selection based on acquisition scores:
+
+.. code-block:: python
+
+   from incerto.active import EntropyAcquisition, UncertaintySampling
+
+   acquisition = EntropyAcquisition()
+   strategy = UncertaintySampling(acquisition, batch_size=100)
+
+   # Returns indices of top 100 most uncertain samples
+   indices = strategy.query(model, unlabeled_data)
+
+Diversity Sampling
+^^^^^^^^^^^^^^^^^^
+
+Balance uncertainty with diversity to avoid redundant samples:
+
+.. code-block:: python
+
+   from incerto.active import EntropyAcquisition, DiversitySampling
+
+   acquisition = EntropyAcquisition()
+   strategy = DiversitySampling(
+       acquisition_fn=acquisition,
+       batch_size=100,
+       diversity_weight=0.5  # Balance uncertainty and diversity
+   )
+
+   indices = strategy.query(model, unlabeled_data)
+
+CoreSet Selection
+^^^^^^^^^^^^^^^^^
+
+Select samples that best cover the feature space:
+
+.. code-block:: python
+
+   from incerto.active import CoreSetSelection
+
+   strategy = CoreSetSelection(batch_size=100)
+
+   # Requires features (can extract from model)
+   indices = strategy.query(
+       features_unlabeled,
+       features_labeled
+   )
+
+BADGE Sampling
+^^^^^^^^^^^^^^
+
+Diverse gradients for batch selection:
+
+.. code-block:: python
+
+   from incerto.active import BadgeSampling
+
+   strategy = BadgeSampling(batch_size=100)
+   indices = strategy.query(model, unlabeled_data)
+
+**Reference**: Ash et al., "Deep Batch Active Learning by Diverse, Uncertain Gradient Lower Bounds" (ICLR 2020)
 
 Complete Active Learning Loop
 ------------------------------
@@ -135,50 +176,54 @@ Complete Active Learning Loop
 .. code-block:: python
 
    import torch
-   from incerto.active import UncertaintySampling, entropy_acquisition
+   from incerto.active import EntropyAcquisition, UncertaintySampling
 
-   # Initial setup
-   labeled_data = initial_labeled_set  # Small labeled set
-   unlabeled_pool = large_unlabeled_set
-   budget = 1000  # Number of labels we can afford
+   # Manual loop example
+   labeled_indices = initial_labeled_indices
+   unlabeled_indices = torch.arange(len(dataset))
+   unlabeled_indices = unlabeled_indices[~torch.isin(unlabeled_indices, labeled_indices)]
 
-   # Initial model
-   model = train_model(labeled_data)
+   acquisition = EntropyAcquisition()
+   strategy = UncertaintySampling(acquisition, batch_size=100)
 
-   # Active learning loop
-   n_queries = budget // 100  # Query 100 samples at a time
+   for round in range(10):
+       # Train model on labeled data
+       model = train_model(dataset, labeled_indices)
 
-   for round in range(n_queries):
-       print(f"Round {round + 1}/{n_queries}")
+       # Get unlabeled samples
+       unlabeled_data = dataset[unlabeled_indices][0]  # features only
 
-       # 1. Select samples to label
-       strategy = UncertaintySampling(
-           model,
-           acquisition_fn=entropy_acquisition
-       )
+       # Query most informative samples
+       query_local_indices = strategy.query(model, unlabeled_data)
 
-       query_indices = strategy.query(
-           unlabeled_pool,
-           n_samples=100
-       )
+       # Map back to global indices
+       query_global_indices = unlabeled_indices[query_local_indices]
 
-       # 2. Get labels (human annotation or oracle)
-       query_samples = unlabeled_pool[query_indices]
-       query_labels = get_labels(query_samples)  # Human labeling
+       # Update labeled/unlabeled sets
+       labeled_indices = torch.cat([labeled_indices, query_global_indices])
+       unlabeled_mask = ~torch.isin(unlabeled_indices, query_global_indices)
+       unlabeled_indices = unlabeled_indices[unlabeled_mask]
 
-       # 3. Add to labeled set
-       labeled_data.add(query_samples, query_labels)
+       # Evaluate
+       accuracy = evaluate(model, test_loader)
+       print(f"Round {round+1}: {len(labeled_indices)} labeled, accuracy={accuracy:.2%}")
 
-       # 4. Remove from unlabeled pool
-       unlabeled_pool.remove(query_indices)
+You can also use the utility function:
 
-       # 5. Retrain model
-       model = train_model(labeled_data)
+.. code-block:: python
 
-       # 6. Evaluate
-       accuracy = evaluate(model, test_set)
-       print(f"Accuracy: {accuracy:.2%}")
-       print(f"Labeled samples: {len(labeled_data)}")
+   from incerto.active import active_learning_loop
+
+   # Run active learning with custom training function
+   results = active_learning_loop(
+       model=model,
+       train_loader=train_loader,
+       unlabeled_loader=unlabeled_loader,
+       acquisition=EntropyAcquisition(),
+       train_fn=train_fn,
+       n_rounds=10,
+       samples_per_round=100,
+   )
 
 Practical Tips
 --------------
@@ -188,22 +233,20 @@ Practical Tips
 
 .. code-block:: python
 
-   # Query 100 samples in batch
-   query_indices = strategy.query(unlabeled_pool, n_samples=100)
+   # Configure batch size in strategy
+   strategy = UncertaintySampling(acquisition, batch_size=100)
 
 **Diversity**:
-   Combine uncertainty with diversity to avoid querying similar samples
+   Use DiversitySampling to avoid querying similar samples
 
 .. code-block:: python
 
-   from incerto.active import diverse_batch_query
+   from incerto.active import DiversitySampling, EntropyAcquisition
 
-   # Select diverse AND uncertain samples
-   query_indices = diverse_batch_query(
-       model,
-       unlabeled_pool,
-       n_samples=100,
-       diversity_weight=0.5
+   strategy = DiversitySampling(
+       acquisition_fn=EntropyAcquisition(),
+       batch_size=100,
+       diversity_weight=0.5  # 0.5 = equal weight to uncertainty and diversity
    )
 
 **Cold start**:
@@ -214,7 +257,6 @@ Practical Tips
    # Initial random sample
    initial_size = 100
    initial_indices = torch.randperm(len(dataset))[:initial_size]
-   labeled_data = dataset[initial_indices]
 
 **Stopping criteria**:
    Stop when performance plateaus or budget exhausted
@@ -225,7 +267,7 @@ Practical Tips
        print("Target accuracy reached!")
        break
 
-   if len(labeled_data) >= max_budget:
+   if len(labeled_indices) >= max_budget:
        print("Budget exhausted!")
        break
 
@@ -251,12 +293,6 @@ Evaluation
 **Reduction ratio**:
    How much data saved to reach target accuracy
 
-.. code-block:: python
-
-   # E.g., active learning reaches 95% accuracy with 1000 samples
-   # Random sampling needs 5000 samples for same accuracy
-   # Reduction ratio = 5000 / 1000 = 5x
-
 Best Practices
 --------------
 
@@ -278,38 +314,29 @@ Best Practices
 6. **Compare to random baseline**
       Always benchmark against random sampling
 
-7. **Monitor labeling quality**
-      Human labels may be noisy or biased
-
 Common Pitfalls
 ---------------
 
-❌ **Querying only hardest samples**
-      Can lead to noisy/outlier labels
-
-❌ **Not using diversity**
-      Queries may be redundant
-
-❌ **Infrequent retraining**
-      Model doesn't benefit from new labels
-
-❌ **Wrong initial set**
-      Cold start matters - use stratified sampling
-
-❌ **Ignoring label noise**
-      Uncertain samples may have unreliable labels
+- **Querying only hardest samples**: Can lead to noisy/outlier labels
+- **Not using diversity**: Queries may be redundant
+- **Infrequent retraining**: Model doesn't benefit from new labels
+- **Wrong initial set**: Cold start matters - use stratified sampling
 
 Advanced Topics
 ---------------
 
 **Query by committee**:
-   Use ensemble disagreement instead of single model uncertainty
+   Use ensemble disagreement:
 
-**Expected model change**:
-   Query samples that change model most
+.. code-block:: python
 
-**Expected error reduction**:
-   Query samples that reduce expected error most
+   from incerto.active import QueryByCommittee
+
+   # Committee of models
+   committee = [model1, model2, model3]
+   strategy = QueryByCommittee(committee, batch_size=100)
+
+   indices = strategy.query(unlabeled_data, model=committee[0])
 
 References
 ----------

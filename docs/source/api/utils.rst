@@ -14,7 +14,6 @@ Models
 
    ConvNet
    ResNet18
-   ResNet34
    MLP
 
 Training
@@ -25,7 +24,7 @@ Training
    :recursive:
 
    train_epoch
-   evaluate_epoch
+   evaluate
    seed_everything
 
 Visualization
@@ -35,5 +34,17 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
+   plot_training_curves
+   plot_uncertainty_distribution
    plot_2d_classification
-   plot_decision_boundary
+
+Logging
+-------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   get_logger
+   setup_logging
+   disable_logging

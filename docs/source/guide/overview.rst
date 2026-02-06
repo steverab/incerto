@@ -63,7 +63,7 @@ Design Principles
     Implementations based on peer-reviewed publications with proper citations
 
 **Well-Tested**
-    236+ tests ensuring correctness and reliability
+    509 tests ensuring correctness and reliability
 
 **Modular**
     Use individual components or combine them for comprehensive uncertainty quantification
@@ -90,4 +90,5 @@ Next Steps
 
 - :doc:`installation` - Install incerto
 - :doc:`quickstart` - Get started with examples
+- :doc:`method_selection` - Which method should I use?
 - :doc:`calibration` - Learn about calibration methods

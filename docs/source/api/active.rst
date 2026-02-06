@@ -13,14 +13,15 @@ Acquisition Functions
    :toctree: _autosummary
    :recursive:
 
-   entropy_acquisition
-   bald_acquisition
-   margin_acquisition
-   variance_ratio_acquisition
-   mean_std_acquisition
-   least_confidence_acquisition
-   max_entropy_acquisition
-   random_acquisition
+   BaseAcquisition
+   RandomAcquisition
+   EntropyAcquisition
+   LeastConfidenceAcquisition
+   MarginAcquisition
+   BALDAcquisition
+   VarianceRatioAcquisition
+   MeanSTDAcquisition
+   BatchBALDAcquisition
 
 Query Strategies
 ----------------
@@ -31,9 +32,9 @@ Query Strategies
 
    UncertaintySampling
    DiversitySampling
-   CoreSet
-   BADGE
-   BatchBALD
+   CoreSetSelection
+   BadgeSampling
+   QueryByCommittee
 
 Utilities
 ---------
@@ -42,4 +43,8 @@ Utilities
    :toctree: _autosummary
    :recursive:
 
-   ActiveLearningDataset
+   split_labeled_unlabeled
+   compute_diversity_penalty
+   greedy_k_center
+   subsample_for_efficiency
+   active_learning_loop

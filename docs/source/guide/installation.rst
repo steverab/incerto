@@ -13,14 +13,17 @@ Requirements
 Install from PyPI
 -----------------
 
-.. note::
-   PyPI release coming soon!
-
-Once released, you can install incerto using pip:
-
 .. code-block:: bash
 
    pip install incerto
+
+With optional extras:
+
+.. code-block:: bash
+
+   pip install incerto[vision]   # + torchvision for vision datasets
+   pip install incerto[llm]      # + transformers, accelerate, sentence-transformers
+   pip install incerto[all]      # all optional dependencies
 
 Install from Source
 -------------------
@@ -79,13 +82,11 @@ incerto automatically uses CUDA if PyTorch is installed with GPU support:
 Optional Dependencies
 ---------------------
 
-Some features may require additional packages:
+Some features require additional packages, available via extras:
 
-- **transformers**: For LLM uncertainty methods
-- **matplotlib**: For visualization utilities
-- **rich**: For pretty output formatting
-
-These are included in the base installation.
+- ``incerto[vision]``: **torchvision** for vision datasets and benchmarks
+- ``incerto[llm]``: **transformers**, **accelerate**, **sentence-transformers** for LLM uncertainty methods
+- ``incerto[all]``: All optional dependencies
 
 Troubleshooting
 ---------------

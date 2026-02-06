@@ -48,18 +48,23 @@ Abstain when max softmax probability < threshold:
 
    from incerto.sp import SoftmaxThreshold
 
-   selector = SoftmaxThreshold(threshold=0.9)
+   # Wrap your trained model
+   selector = SoftmaxThreshold(model)
+   selector.eval()
 
-   # Make predictions
-   logits = model(test_data)
-   predictions, abstention = selector.predict(logits)
+   # Forward pass with confidence scores
+   with torch.no_grad():
+       logits, confidence = selector(test_data, return_confidence=True)
 
-   # predictions[i] is None where abstention[i] is True
-   coverage = (~abstention).float().mean()
-   accepted_preds = predictions[~abstention]
-   accepted_labels = labels[~abstention]
+   predictions = logits.argmax(dim=-1)
 
-   accuracy = (accepted_preds == accepted_labels).float().mean()
+   # Set threshold and reject low-confidence samples
+   threshold = confidence.quantile(0.2)  # reject bottom 20%
+   rejected = selector.reject(confidence, threshold)
+   selected = ~rejected
+
+   accuracy = (predictions[selected] == labels[selected]).float().mean()
+   coverage = selected.float().mean()
 
    print(f"Coverage: {coverage:.2%}")
    print(f"Selective accuracy: {accuracy:.2%}")
@@ -73,82 +78,85 @@ Abstain when max softmax probability < threshold:
    - Threshold requires tuning
    - May not be optimal
 
-Monte Carlo Dropout
-^^^^^^^^^^^^^^^^^^^
+Deep Gambler
+^^^^^^^^^^^^
 
-**Best for**: Bayesian uncertainty estimates
+**Best for**: Learning when to abstain during training
 
-Use dropout uncertainty for selection:
-
-.. code-block:: python
-
-   from incerto.bayesian import MCDropout
-   from incerto.sp import UncertaintyBasedSelection
-
-   # Enable dropout during inference
-   mc_dropout = MCDropout(model, n_samples=10)
-
-   # Get predictions with uncertainty
-   result = mc_dropout.predict(test_data)
-
-   # Select based on epistemic uncertainty
-   selector = UncertaintyBasedSelection(threshold=0.1)
-   predictions, abstention = selector.predict(
-       result['mean'],
-       result['epistemic']
-   )
-
-Entropy-Based Selection
-^^^^^^^^^^^^^^^^^^^^^^^
-
-**Best for**: Information-theoretic approach
-
-Abstain on high-entropy predictions:
+Adds an extra abstain logit and trains with the gambler's loss:
 
 .. code-block:: python
 
-   from incerto.sp import EntropyThreshold
+   from incerto.sp import DeepGambler
 
-   selector = EntropyThreshold(threshold=0.5)
+   # Create model with abstain head
+   gambler = DeepGambler(backbone, num_classes=10, num_features=128)
 
-   logits = model(test_data)
-   predictions, abstention = selector.predict(logits)
+   # Training loop
+   for inputs, labels in train_loader:
+       logits = gambler(inputs)  # shape: (batch, num_classes + 1)
+       loss = gambler.gambler_loss(logits, labels, reward=2.2)
+       loss.backward()
+       optimizer.step()
+
+   # Inference — confidence is 1 - P(abstain)
+   logits, confidence = gambler(test_data, return_confidence=True)
 
 Self-Adaptive Training (SAT)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Best for**: Training models for selective prediction
+**Best for**: Improving calibration during training for better selective prediction
 
-Train model to output selection scores:
+Train model with adaptive soft labels that blend ground truth and model predictions:
 
 .. code-block:: python
 
    from incerto.sp import SelfAdaptiveTraining
 
-   model_with_selection = SelfAdaptiveTraining(
-       base_model,
-       num_classes=10
+   sat = SelfAdaptiveTraining(
+       backbone,
+       num_classes=10,
+       alpha_start=0.0,
+       alpha_end=0.9,
+       warmup_epochs=5,
    )
 
    # Training loop
+   for epoch in range(total_epochs):
+       alpha = sat.get_alpha(epoch, total_epochs)
+
+       for inputs, labels in train_loader:
+           logits = sat(inputs)
+           loss = sat.sat_loss(logits, labels, alpha)
+           loss.backward()
+           optimizer.step()
+
+   # Inference — uses MSP confidence like SoftmaxThreshold
+   logits, confidence = sat(test_data, return_confidence=True)
+
+SelectiveNet
+^^^^^^^^^^^^^
+
+**Best for**: Learning a dedicated selection function
+
+Adds a selection head g(x) that outputs a selection probability:
+
+.. code-block:: python
+
+   from incerto.sp import SelectiveNet
+
+   snet = SelectiveNet(backbone, num_classes=10, num_features=128)
+
+   # Training loop — use the SelectiveNet loss
    for inputs, labels in train_loader:
-       logits, selection_scores = model_with_selection(inputs)
-
-       # SAT loss combines classification and selection
-       loss = model_with_selection.sat_loss(
-           logits,
-           selection_scores,
-           labels,
-           coverage=0.8  # Target 80% coverage
-       )
-
+       logits, selection = snet(inputs, return_confidence=True)
+       loss = snet.selective_loss(logits, labels, selection, coverage_target=0.8)
        loss.backward()
        optimizer.step()
 
-   # Inference with learned selection
-   logits, selection_scores = model_with_selection(test_data)
-   predictions = logits.argmax(dim=-1)
-   abstention = selection_scores < threshold
+   # Inference — confidence comes from the selection head g(x)
+   logits, confidence = snet(test_data, return_confidence=True)
+   rejected = snet.reject(confidence, threshold=0.5)
 
 Complete Workflow
 -----------------
@@ -156,66 +164,48 @@ Complete Workflow
 .. code-block:: python
 
    import torch
-   from incerto.sp import SoftmaxThreshold, selective_risk, coverage_rate
+   from incerto.sp import SoftmaxThreshold, coverage, risk, aurc
 
    # 1. Train model normally
    model = train_model(train_loader)
 
-   # 2. Choose selection strategy
-   selector = SoftmaxThreshold(threshold=0.95)
+   # 2. Wrap with selective predictor
+   selector = SoftmaxThreshold(model)
+   selector.eval()
 
-   # 3. Evaluate on validation set to choose threshold
-   val_logits, val_labels = get_predictions(model, val_loader)
-   predictions, abstention = selector.predict(val_logits)
+   # 3. Get predictions and confidence on validation set
+   with torch.no_grad():
+       logits, confidence = selector(val_data, return_confidence=True)
+   predictions = logits.argmax(dim=-1)
 
-   coverage = (~abstention).float().mean()
-   accepted = ~abstention
-   selective_acc = (predictions[accepted] == val_labels[accepted]).float().mean()
+   # 4. Evaluate at different thresholds
+   for threshold in [0.7, 0.8, 0.9, 0.95]:
+       rejected = selector.reject(confidence, threshold)
+       selected = ~rejected
 
-   print(f"Coverage: {coverage:.2%}")
-   print(f"Selective accuracy: {selective_acc:.2%}")
+       cov = coverage(rejected)
+       sel_acc = (predictions[selected] == val_labels[selected]).float().mean()
 
-   # 4. Adjust threshold to achieve desired coverage
-   # Try different thresholds...
+       print(f"Threshold {threshold}: coverage={cov:.2%}, accuracy={sel_acc:.2%}")
 
-   # 5. Deploy with chosen threshold
-   def predict_with_abstention(x):
-       logits = model(x)
-       pred, abstain = selector.predict(logits)
-
-       if abstain:
-           return None  # Abstain - defer to human
-       return pred
+   # 5. Compute AURC
+   sorted_conf, idx = confidence.sort(descending=True)
+   sorted_errors = (predictions[idx] != val_labels[idx]).float()
+   score = aurc(sorted_conf, sorted_errors)
+   print(f"AURC: {score:.4f}")
 
 Metrics
 -------
 
 **Coverage-Risk Curve**:
-   Plot selective accuracy vs. coverage
+   Plot risk vs. coverage across thresholds
 
 .. code-block:: python
 
-   from incerto.sp import plot_coverage_risk_curve
+   from incerto.sp import plot_risk_coverage
 
-   thresholds = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
-   coverages, risks = [], []
-
-   for threshold in thresholds:
-       selector = SoftmaxThreshold(threshold=threshold)
-       preds, abstention = selector.predict(logits)
-
-       coverage = (~abstention).float().mean()
-       risk = selective_risk(preds[~abstention], labels[~abstention])
-
-       coverages.append(coverage.item())
-       risks.append(risk.item())
-
-   # Plot
-   import matplotlib.pyplot as plt
-   plt.plot(coverages, risks)
-   plt.xlabel('Coverage')
-   plt.ylabel('Selective Risk')
-   plt.title('Coverage-Risk Curve')
+   fig, ax = plt.subplots()
+   plot_risk_coverage(logits, labels, confidence, ax=ax, show_aurc=True)
 
 **Area Under Risk-Coverage Curve (AURC)**:
    Lower is better (perfect = 0)
@@ -224,7 +214,9 @@ Metrics
 
    from incerto.sp import aurc
 
-   score = aurc(coverages, risks)
+   sorted_conf, idx = confidence.sort(descending=True)
+   sorted_errors = (predictions[idx] != labels[idx]).float()
+   score = aurc(sorted_conf, sorted_errors)
 
 Best Practices
 --------------
@@ -243,9 +235,6 @@ Best Practices
 
 5. **Plan for abstention**
       What happens when model abstains? (Human review, fallback model, etc.)
-
-6. **Use multiple signals**
-      Combine softmax, entropy, MC dropout for better selection
 
 Trade-offs
 ----------
@@ -268,9 +257,11 @@ Choose based on:
 References
 ----------
 
-1. Geifman & El-Yaniv, "Selective Classification for Deep Neural Networks" (NeurIPS 2017)
-2. Geifman & El-Yaniv, "SelectiveNet: A Deep Neural Network with a Rejection Option" (ICML 2019)
-3. Mozannar & Sontag, "Consistent Estimators for Learning to Defer" (NeurIPS 2020)
+1. Chow, "An optimum character recognition system using decision functions" (1957)
+2. Geifman & El-Yaniv, "Selective Classification for Deep Neural Networks" (NeurIPS 2017)
+3. Geifman & El-Yaniv, "SelectiveNet: A Deep Neural Network with a Rejection Option" (ICML 2019)
+4. Ziyin et al., "Deep Gamblers: Learning to Abstain with Portfolio Theory" (NeurIPS 2019)
+5. Huang et al., "Self-Adaptive Training: beyond Empirical Risk Minimization" (NeurIPS 2020)
 
 See Also
 --------

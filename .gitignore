@@ -71,6 +71,7 @@ instance/
 # Sphinx documentation
 docs/build/
 docs/source/_autosummary/
+docs/source/api/_autosummary/
 docs/source/_build/
 *.doctrees
 
@@ -177,7 +178,7 @@ cython_debug/
 .pypirc
 
 .DS_Store
-data
+/data
 
 # Generated output from examples
 output/

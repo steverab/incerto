@@ -76,25 +76,27 @@ Different conformity scores lead to different prediction sets:
 
 .. code-block:: python
 
-   from incerto.conformal import APS
+   from incerto.conformal import aps
 
-   predictor = APS(model, alpha=0.1)
-   predictor.fit(calibration_loader)
+   # aps() calibrates and returns a predictor callable
+   predictor = aps(model, calibration_loader, alpha=0.1)
 
-   # Smaller sets, adapts to uncertainty
-   prediction_sets = predictor.predict(test_data)
+   # Use the predictor on test data
+   prediction_sets = predictor(test_data)
 
 **Cumulative score** (RAPS):
 
 .. code-block:: python
 
-   from incerto.conformal import RAPS
+   from incerto.conformal import raps
 
    # Regularized Adaptive Prediction Sets
-   predictor = RAPS(model, alpha=0.1, k_reg=2, lambda_reg=0.01)
-   predictor.fit(calibration_loader)
+   predictor = raps(
+       model, calibration_loader,
+       alpha=0.1, k_reg=2, lam=0.01
+   )
 
-   prediction_sets = predictor.predict(test_data)
+   prediction_sets = predictor(test_data)
 
 Complete Workflow
 -----------------
@@ -103,7 +105,7 @@ Complete Workflow
 
    import torch
    from torch.utils.data import DataLoader, random_split
-   from incerto.conformal import APS
+   from incerto.conformal import aps
 
    # 1. Split data: train / calibration / test
    dataset = load_dataset()
@@ -124,17 +126,14 @@ Complete Workflow
    model = YourModel()
    train_model(model, train_loader)
 
-   # 3. Create conformal predictor
+   # 3. Create conformal predictor (calibrates in one call)
    alpha = 0.1  # 90% coverage
-   predictor = APS(model, alpha=alpha)
+   predictor = aps(model, cal_loader, alpha=alpha)
 
-   # 4. Calibrate
-   predictor.fit(cal_loader)
-
-   # 5. Evaluate coverage
+   # 4. Evaluate coverage
    covered, set_sizes = [], []
    for x, y in test_loader:
-       pred_sets = predictor.predict(x)
+       pred_sets = predictor(x)
 
        for i in range(len(y)):
            pred_set = pred_sets[i]

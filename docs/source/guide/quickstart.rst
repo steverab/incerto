@@ -84,19 +84,23 @@ Abstain from uncertain predictions:
 .. code-block:: python
 
    from incerto.sp import SoftmaxThreshold
-   from incerto.sp import selective_risk
 
-   # Create selective predictor
-   selector = SoftmaxThreshold(threshold=0.9)
+   # Create selective predictor (wraps your trained model)
+   selector = SoftmaxThreshold(model)
+   selector.eval()
 
-   # Make predictions with abstention
-   logits = model(test_data)
-   predictions, abstention = selector.predict(logits)
+   # Get logits and confidence scores
+   with torch.no_grad():
+       logits, confidence = selector(test_data, return_confidence=True)
 
-   # Predictions is None where abstention is True
-   coverage = (~abstention).float().mean()
-   risk = selective_risk(predictions[~abstention], labels[~abstention])
-   print(f"Coverage: {coverage:.2%}, Risk: {risk:.4f}")
+   predictions = logits.argmax(dim=-1)
+
+   # Reject low-confidence predictions
+   threshold = 0.9
+   rejected = selector.reject(confidence, threshold)
+   coverage = (~rejected).float().mean()
+   acc = (predictions[~rejected] == labels[~rejected]).float().mean()
+   print(f"Coverage: {coverage:.2%}, Selective accuracy: {acc:.4f}")
 
 LLM Uncertainty
 ---------------
@@ -131,16 +135,13 @@ Approximate Bayesian inference for epistemic uncertainty:
    from incerto.bayesian import MCDropout
 
    # Enable dropout during inference
-   mc_dropout = MCDropout(model, n_samples=10)
+   mc_dropout = MCDropout(model, num_samples=10)
 
-   # Get uncertainty estimates
-   result = mc_dropout.predict(test_data)
+   # Get uncertainty estimates (returns tuple, not dict)
+   mean_pred, variance = mc_dropout.predict(test_data)
 
-   mean_pred = result['mean']  # Average prediction
-   epistemic = result['epistemic']  # Model uncertainty
-   aleatoric = result['aleatoric']  # Data uncertainty
-
-   print(f"Total uncertainty: {epistemic + aleatoric}")
+   print(f"Mean predictions shape: {mean_pred.shape}")
+   print(f"Average predictive variance: {variance.mean():.4f}")
 
 Active Learning
 ---------------
@@ -149,12 +150,12 @@ Select informative samples for labeling:
 
 .. code-block:: python
 
-   from incerto.active import entropy_acquisition, UncertaintySampling
+   from incerto.active import EntropyAcquisition, UncertaintySampling
 
    # Initialize active learning strategy
    strategy = UncertaintySampling(
        model,
-       acquisition_fn=entropy_acquisition
+       acquisition_fn=EntropyAcquisition()
    )
 
    # Query most uncertain samples
@@ -174,21 +175,23 @@ Detect shifts between training and deployment data:
 
 .. code-block:: python
 
-   from incerto.shift import mmd_test, classifier_two_sample_test
+   from incerto.shift import MMDShiftDetector
 
-   # Maximum Mean Discrepancy test
-   mmd_result = mmd_test(train_features, deploy_features)
-   print(f"MMD test p-value: {mmd_result['p_value']:.4f}")
+   # Create MMD shift detector
+   detector = MMDShiftDetector(sigma=1.0)
 
-   if mmd_result['p_value'] < 0.05:
+   # Fit on reference (training) distribution
+   detector.fit(train_loader)
+
+   # Score production data (higher = more shift)
+   shift_score = detector.score(production_loader)
+   baseline = detector.score(train_loader)
+
+   print(f"MMD shift score: {shift_score:.6f}")
+   print(f"Baseline score: {baseline:.6f}")
+
+   if shift_score > 2 * baseline:
        print("Significant distribution shift detected!")
-
-   # Classifier-based test
-   c2st_result = classifier_two_sample_test(
-       train_features,
-       deploy_features
-   )
-   print(f"C2ST accuracy: {c2st_result['accuracy']:.4f}")
 
 Saving and Loading Models
 --------------------------
@@ -210,7 +213,7 @@ All calibrators, OOD detectors, and shift detectors support serialization:
 
    # Load from file (need to create instance first)
    new_calibrator = TemperatureScaling()
-   new_calibrator.load_state_dict(torch.load('calibrator.pt'))
+   new_calibrator.load_state_dict(torch.load('calibrator.pt', weights_only=True))
 
    # Or use state_dict directly
    state = calibrator.state_dict()
@@ -221,8 +224,7 @@ All calibrators, OOD detectors, and shift detectors support serialization:
    detector.save('detector_state.pt')
 
    # When loading, provide the model again
-   loaded_detector = Energy(model)
-   loaded_detector.load_state_dict(torch.load('detector_state.pt'))
+   loaded_detector = Energy.load('detector_state.pt', model)
 
    # Shift detector example
    shift_detector = MMDShiftDetector(sigma=1.5)

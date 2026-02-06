@@ -15,7 +15,7 @@ Token-level Uncertainty
 
    TokenEntropy
    TokenConfidence
-   Perplexity
+   TokenPerplexity
    SurprisalScore
    TopKConfidence
 
@@ -27,8 +27,11 @@ Sequence-level Uncertainty
    :recursive:
 
    SequenceProbability
-   AverageLogProbability
+   AverageLogProb
+   NormalizedSequenceProb
    SequenceEntropy
+   SequencePerplexity
+   VarianceOfTokenProbs
 
 Sampling-based Uncertainty
 --------------------------
@@ -38,9 +41,12 @@ Sampling-based Uncertainty
    :recursive:
 
    SelfConsistency
-   SemanticEntropy
+   LexicalSimilarity
+   VarianceRatio
    PredictiveEntropy
    MutualInformation
+   SemanticEntropy
+   EnsembleDisagreement
 
 Generation Methods
 ------------------
@@ -50,9 +56,21 @@ Generation Methods
    :recursive:
 
    BeamSearchUncertainty
-   NucleusSampling
+   NucleusSamplingUncertainty
    IDontKnowDetection
    ContrastiveDecoding
+
+Verbalized Uncertainty
+----------------------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   VerbalizedConfidence
+   PTrue
+   SelfEvaluation
+   BidirectionalConsistency
 
 Calibration
 -----------
@@ -61,7 +79,26 @@ Calibration
    :toctree: _autosummary
    :recursive:
 
-   AnswerLevelCalibration
+   TokenTemperatureScaling
+   SequenceLengthCalibration
+   VerbosityBiasCorrection
+   HistogramBinning
+
+Metrics
+-------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   selective_accuracy
+   calibration_error
+   brier_score
+   aur_c
+   uncertainty_auc
+   token_level_accuracy
+   sequence_level_accuracy
+   f1_score_tokens
 
 Visualization
 -------------
@@ -70,5 +107,10 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
-   plot_token_confidence
-   plot_sequence_uncertainty
+   plot_token_uncertainty
+   plot_confidence_vs_correctness
+   plot_generation_diversity
+   plot_semantic_clusters
+   plot_risk_coverage_llm
+   plot_uncertainty_distribution
+   plot_length_vs_confidence

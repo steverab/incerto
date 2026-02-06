@@ -83,7 +83,7 @@ Sample multiple responses and measure agreement:
 
    print(f"Agreement rate: {result['agreement_rate']:.2f}")
    print(f"Unique answers: {result['num_unique']}")
-   print(f"Most common: {result['most_common']}")
+   print(f"Most common: {result['top_response']}")
 
    # High agreement = high confidence
    if result['agreement_rate'] > 0.7:
@@ -133,23 +133,25 @@ Ask model to express uncertainty:
 
 .. code-block:: python
 
-   from incerto.llm import VerbalizedUncertainty
+   from incerto.llm import VerbalizedConfidence
 
    # Prompt model to express uncertainty
    prompt = """
    Answer the question and express your confidence (0-100%).
 
    Question: {question}
-   Answer with format: [Answer] | Confidence: [0-100]
+   Answer with format: [Answer] | Confidence: [0-100]%
    """
 
    response = model.generate(prompt.format(question=query))
 
-   # Parse confidence
-   uncertainty = VerbalizedUncertainty.parse(response)
+   # Extract confidence percentage from response
+   confidence = VerbalizedConfidence.extract_percentage(response)
 
-   print(f"Model confidence: {uncertainty['confidence']}")
-   print(f"Answer: {uncertainty['answer']}")
+   if confidence is not None:
+       print(f"Model confidence: {confidence:.2f}")
+   else:
+       print("Could not extract confidence from response")
 
 **Advantages**:
    - Natural for chat models
@@ -166,7 +168,12 @@ Aggregate token probabilities across sequence:
 
 .. code-block:: python
 
-   from incerto.llm import SequenceLevelUncertainty
+   from incerto.llm import (
+       AverageLogProb,
+       SequencePerplexity,
+       SequenceEntropy,
+   )
+   import torch
 
    # Generate with log probabilities
    output = model.generate(
@@ -175,12 +182,18 @@ Aggregate token probabilities across sequence:
        output_scores=True
    )
 
-   # Compute sequence-level metrics
-   metrics = SequenceLevelUncertainty.compute(output.scores)
+   # Stack logits and get generated token IDs
+   logits = torch.stack(output.scores, dim=1)
+   generated_ids = output.sequences[:, input_ids.shape[1]:]
 
-   print(f"Mean log probability: {metrics['mean_logprob']:.4f}")
-   print(f"Perplexity: {metrics['perplexity']:.4f}")
-   print(f"Entropy: {metrics['entropy']:.4f}")
+   # Compute sequence-level metrics
+   avg_log_prob = AverageLogProb.compute(logits, generated_ids)
+   perplexity = SequencePerplexity.compute(logits, generated_ids)
+   entropy = SequenceEntropy.compute(logits, aggregation="mean")
+
+   print(f"Mean log probability: {avg_log_prob[0].item():.4f}")
+   print(f"Perplexity: {perplexity[0].item():.4f}")
+   print(f"Entropy: {entropy[0].item():.4f}")
 
 Complete Example
 ----------------
@@ -224,7 +237,7 @@ Uncertainty-aware generation:
            'agreement_rate': consistency['agreement_rate'],
            'num_unique': consistency['num_unique'],
            'avg_entropy': sum(all_entropies) / len(all_entropies),
-           'most_common_answer': consistency['most_common']
+           'top_answer': consistency['top_response']
        }
 
        return uncertainty_score
@@ -233,7 +246,7 @@ Uncertainty-aware generation:
    result = generate_with_uncertainty(model, "What is the capital of France?")
 
    if result['agreement_rate'] > 0.8:
-       print(f"High confidence answer: {result['most_common_answer']}")
+       print(f"High confidence answer: {result['top_answer']}")
    else:
        print(f"Low confidence - {result['num_unique']} different answers")
        print("Consider fact-checking or abstaining")

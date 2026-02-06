@@ -6,6 +6,15 @@ that confidence scores accurately reflect the true probability of correctness.
 
 .. currentmodule:: incerto.calibration
 
+Base Class
+----------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   BaseCalibrator
+
 Post-hoc Calibration Methods
 -----------------------------
 
@@ -16,9 +25,9 @@ Post-hoc Calibration Methods
    TemperatureScaling
    VectorScaling
    MatrixScaling
-   PlattScaling
-   IsotonicRegression
-   HistogramBinning
+   PlattScalingCalibrator
+   IsotonicRegressionCalibrator
+   HistogramBinningCalibrator
    DirichletCalibrator
    BetaCalibrator
    IdentityCalibrator
@@ -33,7 +42,8 @@ Training-time Calibration
    LabelSmoothingLoss
    FocalLoss
    ConfidencePenalty
-   EvidentialLoss
+   evidential_loss
+   get_uncertainty_from_evidence
    TemperatureAwareTraining
 
 Metrics
@@ -45,10 +55,11 @@ Metrics
 
    ece_score
    mce_score
-   classwise_ece_score
+   classwise_ece
    adaptive_ece_score
+   smooth_ece
    brier_score
-   nll_score
+   nll
 
 Visualization
 -------------
@@ -58,6 +69,7 @@ Visualization
    :recursive:
 
    plot_reliability_diagram
+   plot_smooth_reliability_diagram
    plot_confidence_histogram
    plot_calibration_curve
 
@@ -68,4 +80,6 @@ Utilities
    :toctree: _autosummary
    :recursive:
 
-   PredictionDistribution
+   get_bin_stats
+   extract_confidences_and_predictions
+   logits_to_probs

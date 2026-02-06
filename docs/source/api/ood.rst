@@ -6,6 +6,15 @@ significantly different from its training distribution.
 
 .. currentmodule:: incerto.ood
 
+Base Class
+----------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   OODDetector
+
 Score-based Methods
 -------------------
 
@@ -36,9 +45,10 @@ Training Methods
    :recursive:
 
    mixup_data
-   cutmix_data
+   mixup_criterion
    OutlierExposureLoss
-   EnergyRegularizationLoss
+   EnergyRegularizedLoss
+   CutMix
 
 Metrics
 -------
@@ -48,8 +58,8 @@ Metrics
    :recursive:
 
    auroc
-   aupr
    fpr_at_tpr
+   detection_accuracy
 
 Visualization
 -------------
@@ -58,5 +68,16 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
-   plot_ood_histogram
-   plot_roc_curve
+   plot_roc
+   score_hist
+
+Utilities
+---------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   compute_threshold_at_tpr
+   get_ood_predictions
+   extract_features

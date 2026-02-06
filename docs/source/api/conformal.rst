@@ -47,5 +47,5 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
-   plot_coverage
-   plot_set_size_distribution
+   plot_coverage_vs_alpha
+   plot_set_size_hist

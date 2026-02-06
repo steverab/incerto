@@ -6,6 +6,15 @@ providing risk-coverage tradeoffs.
 
 .. currentmodule:: incerto.sp
 
+Base Class
+----------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   BaseSelectivePredictor
+
 Methods
 -------
 
@@ -17,6 +26,7 @@ Methods
    SelfAdaptiveTraining
    DeepGambler
    SelectiveNet
+   make
 
 Metrics
 -------
@@ -25,10 +35,10 @@ Metrics
    :toctree: _autosummary
    :recursive:
 
-   selective_risk
-   coverage_at_risk
+   coverage
+   risk
    aurc
-   eaurc
+   accuracy_coverage_curve
 
 Visualization
 -------------
@@ -37,4 +47,5 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
-   plot_risk_coverage_curve
+   plot_risk_coverage
+   plot_accuracy_coverage

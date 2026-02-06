@@ -6,36 +6,29 @@ between training and deployment data.
 
 .. currentmodule:: incerto.shift
 
-Statistical Tests
------------------
+Base Class
+----------
 
 .. autosummary::
    :toctree: _autosummary
    :recursive:
 
-   mmd_test
-   energy_distance_test
-   ks_test
-   classifier_two_sample_test
+   BaseShiftDetector
 
-Label Shift Detection
----------------------
+Shift Detectors
+---------------
 
 .. autosummary::
    :toctree: _autosummary
    :recursive:
 
-   label_shift_detection
-   bbse_label_shift
-
-Importance Weighting
---------------------
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   importance_weight_estimation
+   MMDShiftDetector
+   EnergyShiftDetector
+   KSShiftDetector
+   ClassifierShiftDetector
+   BBSDDetector
+   LabelShiftDetector
+   ImportanceWeightingShift
 
 Metrics
 -------
@@ -44,6 +37,9 @@ Metrics
    :toctree: _autosummary
    :recursive:
 
+   energy_distance
+   total_variation
+   population_stability_index
    wasserstein_distance
    sliced_wasserstein_distance
 
@@ -54,4 +50,8 @@ Visualization
    :toctree: _autosummary
    :recursive:
 
-   plot_shift_detection
+   plot_feature_histograms
+   plot_embedding_space
+   plot_confidence_distributions
+   plot_shift_severity
+   plot_ks_statistics

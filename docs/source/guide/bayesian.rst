@@ -31,21 +31,18 @@ Approximate Bayesian inference by using dropout at test time:
    from incerto.bayesian import MCDropout
 
    # Use dropout during inference
-   mc_dropout = MCDropout(model, n_samples=10)
+   mc_dropout = MCDropout(model, num_samples=10)
 
    # Get predictions with uncertainty
-   result = mc_dropout.predict(test_data)
+   mean_pred, variance = mc_dropout.predict(test_data)
 
-   mean_pred = result['mean']           # Average prediction
-   epistemic = result['epistemic']      # Model uncertainty
-   aleatoric = result['aleatoric']      # Data uncertainty
-   total_unc = result['total']          # Total uncertainty
+   # Variance captures epistemic (model) uncertainty
+   print(f"Epistemic uncertainty: {variance.mean():.4f}")
 
    # Entropy and mutual information
-   entropy = result['predictive_entropy']
-   mutual_info = result['mutual_information']
+   entropy = mc_dropout.predict_entropy(test_data)
+   mutual_info = mc_dropout.predict_mutual_information(test_data)
 
-   print(f"Epistemic uncertainty: {epistemic.mean():.4f}")
    print(f"Model is uncertain where it hasn't seen data")
 
 **How it works**:
@@ -76,20 +73,25 @@ Train multiple models with different initializations:
 
    from incerto.bayesian import DeepEnsemble
 
-   # Train multiple models
-   models = [train_model(seed=i) for i in range(5)]
+   # Create ensemble with a model factory function
+   def create_model():
+       return MyModel()
 
-   ensemble = DeepEnsemble(models)
+   ensemble = DeepEnsemble(create_model, num_models=5)
 
-   # Get predictions
-   result = ensemble.predict(test_data, return_all=True)
+   # Train each model separately
+   for i, model in enumerate(ensemble.models):
+       train_model(model, seed=i)
 
-   mean_pred = result['mean']
-   epistemic = result['epistemic']
+   # Get predictions with uncertainty
+   mean_pred, variance = ensemble.predict(test_data)
+
+   # Or get all individual predictions
+   mean_pred, variance, all_preds = ensemble.predict(test_data, return_samples=True)
 
    # Measure diversity
    diversity = ensemble.diversity(test_data)
-   print(f"Ensemble diversity: {diversity:.4f}")
+   print(f"Ensemble diversity: {diversity.mean():.4f}")
 
 **Advantages**:
    - State-of-the-art uncertainty estimates
@@ -114,21 +116,23 @@ Approximates posterior using weight statistics during training:
 
    from incerto.bayesian import SWAG
 
-   swag = SWAG(model, num_classes=10)
+   swag = SWAG(model, num_samples=20)
 
-   # Collect model snapshots during training
+   # Collect model snapshots during training (after warmup)
    for epoch in range(epochs):
        for batch in train_loader:
            # Train normally
            loss = train_step(model, batch)
 
-       # Collect model statistics
-       swag.collect_model(model)
+       # Collect model statistics (typically after learning rate schedule)
+       if epoch >= warmup_epochs:
+           swag.collect_model(model)
 
    # Sample from approximate posterior
-   result = swag.predict(test_data, n_samples=10)
+   mean_pred, variance = swag.predict(test_data)
 
-   epistemic = result['epistemic']
+   # Variance captures epistemic uncertainty
+   print(f"Epistemic uncertainty: {variance.mean():.4f}")
 
 **Advantages**:
    - Low overhead (one training run)
@@ -157,11 +161,15 @@ Gaussian approximation around MAP estimate:
    model = train_model(train_loader)
 
    # Fit Laplace approximation
-   laplace = LaplaceApproximation(model, num_classes=10)
-   laplace.fit(train_loader)
+   laplace = LaplaceApproximation(
+       model,
+       likelihood='classification',
+       num_samples=20
+   )
+   laplace.fit(train_loader, device='cuda')
 
    # Get predictions with uncertainty
-   result = laplace.predict(test_data, n_samples=10)
+   mean_pred, variance = laplace.predict(test_data)
 
 **Advantages**:
    - Works with pre-trained models
@@ -186,26 +194,22 @@ Learn distribution over weights via variational inference:
 
    # Create Bayesian neural network
    model = VariationalBayesNN(
-       input_dim=784,
-       hidden_dim=256,
-       output_dim=10
+       in_features=784,
+       hidden_sizes=[256, 128],
+       out_features=10,
+       num_samples=20
    )
 
-   # Training with VI loss
+   # Training with variational loss (combines NLL + KL)
+   optimizer = torch.optim.Adam(model.parameters())
    for inputs, labels in train_loader:
-       # Forward pass samples from weight distribution
-       outputs = model(inputs)
-
-       # VI loss = likelihood + KL divergence
-       kl_div = model.kl_divergence()
-       nll = F.cross_entropy(outputs, labels)
-       loss = nll + kl_div / len(train_loader)
-
+       optimizer.zero_grad()
+       loss = model.variational_loss(inputs, labels, num_samples=5)
        loss.backward()
        optimizer.step()
 
-   # Inference
-   result = model.predict(test_data, n_samples=10)
+   # Inference with uncertainty
+   mean_pred, variance = model.predict(test_data)
 
 **Advantages**:
    - Principled Bayesian approach
@@ -229,38 +233,39 @@ Complete Workflow
    train_model(model, train_loader)
 
    # 2. Create MC Dropout predictor
-   mc_dropout = MCDropout(model, n_samples=20)
+   mc_dropout = MCDropout(model, num_samples=20)
 
    # 3. Get predictions with uncertainty
-   all_epistemic = []
+   all_variance = []
    all_correct = []
 
    for inputs, labels in test_loader:
-       result = mc_dropout.predict(inputs)
+       mean_pred, variance = mc_dropout.predict(inputs)
 
-       predictions = result['mean'].argmax(dim=-1)
-       epistemic = result['epistemic']
+       predictions = mean_pred.argmax(dim=-1)
+       # Average variance across classes as uncertainty measure
+       uncertainty = variance.mean(dim=-1)
 
        correct = (predictions == labels).float()
 
-       all_epistemic.append(epistemic)
+       all_variance.append(uncertainty)
        all_correct.append(correct)
 
-   epistemic = torch.cat(all_epistemic)
+   uncertainty = torch.cat(all_variance)
    correct = torch.cat(all_correct)
 
    # 4. Analyze uncertainty vs. correctness
-   # High epistemic → likely incorrect
+   # High uncertainty → likely incorrect
    import matplotlib.pyplot as plt
 
-   plt.scatter(epistemic[correct==1], label='Correct')
-   plt.scatter(epistemic[correct==0], label='Incorrect')
-   plt.xlabel('Epistemic Uncertainty')
+   plt.hist(uncertainty[correct==1].numpy(), alpha=0.5, label='Correct')
+   plt.hist(uncertainty[correct==0].numpy(), alpha=0.5, label='Incorrect')
+   plt.xlabel('Uncertainty (Variance)')
    plt.legend()
 
    # 5. Use for selective prediction
-   threshold = epistemic.quantile(0.8)  # Abstain on top 20% uncertain
-   predictions[epistemic > threshold] = -1  # Abstain
+   threshold = uncertainty.quantile(0.8)  # Abstain on top 20% uncertain
+   # Samples with uncertainty > threshold should be reviewed by human
 
 Evaluation
 ----------

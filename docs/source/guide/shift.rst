@@ -217,22 +217,24 @@ Evaluation Metrics
 ------------------
 
 **Shift score**:
-   Method-specific score quantifying shift magnitude
+   Method-specific score quantifying shift magnitude. Higher values indicate
+   more distributional difference.
 
-**Statistical tests**:
-   P-value for hypothesis test (no shift vs. shift)
+**Interpreting scores**:
 
 .. code-block:: python
 
-   from incerto.shift import mmd_test
+   from incerto.shift import MMDShiftDetector
 
-   result = mmd_test(reference_data, test_data)
+   detector = MMDShiftDetector(sigma=1.0)
+   detector.fit(reference_loader)
 
-   print(f"Test statistic: {result['statistic']:.4f}")
-   print(f"P-value: {result['p_value']:.4f}")
+   # Score production data
+   shift_score = detector.score(production_loader)
 
-   if result['p_value'] < 0.05:
-       print("Significant shift detected (p < 0.05)")
+   # Thresholds depend on your data - calibrate on validation set
+   if shift_score > calibrated_threshold:
+       print("Significant shift detected!")
 
 **Area Under Shift Curve**:
    For gradual shifts, plot shift score over time
