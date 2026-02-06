@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'steverab/incerto'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
