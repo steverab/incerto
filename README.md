@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="website/img/incerto_icon.svg" alt="incerto" width="120">
-  <h1>incerto</h1>
+  <img src="website/img/og-image.png" alt="incerto" width="600">
 </div>
 
 <div align="center">
