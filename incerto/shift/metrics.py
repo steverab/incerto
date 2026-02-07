@@ -13,8 +13,10 @@ import torch
 def energy_distance(x: torch.Tensor, y: torch.Tensor) -> float:
     """Szekely–Rizzo energy distance, O(n²) naive implementation."""
 
-    def pdist(t):  # pairwise ℓ2
-        return torch.cdist(t, t, p=2).mean()
+    def pdist(t):  # pairwise ℓ2, excluding zero diagonal
+        d = torch.cdist(t, t, p=2)
+        n = t.shape[0]
+        return d.sum() / (n * (n - 1)) if n > 1 else d.mean()
 
     return (2 * torch.cdist(x, y, p=2).mean() - pdist(x) - pdist(y)).item()
 
@@ -28,7 +30,9 @@ def total_variation(p: torch.Tensor, q: torch.Tensor, eps: float = 1e-9) -> floa
 
 def population_stability_index(p_hist, q_hist, eps: float = 1e-9) -> float:
     """Classic tabular PSI used in credit scoring."""
-    p, q = p_hist + eps, q_hist + eps
+    p = p_hist / (p_hist.sum() + eps)
+    q = q_hist / (q_hist.sum() + eps)
+    p, q = p + eps, q + eps
     return ((q - p) * torch.log(q / p)).sum().item()
 
 
@@ -95,8 +99,8 @@ def wasserstein_distance(
     # For multi-dimensional case, use Sinkhorn algorithm
     n, m = x.shape[0], y.shape[0]
 
-    # Compute cost matrix (pairwise distances)
-    C = torch.cdist(x, y, p=p) ** p
+    # Compute cost matrix (pairwise L2 distances raised to power p)
+    C = torch.cdist(x, y, p=2) ** p
 
     # Auto-scale epsilon if not provided to avoid numerical issues
     # Use median of cost matrix as a robust scale estimate
@@ -200,8 +204,9 @@ def sliced_wasserstein_distance(
         else:
             x_interp, y_interp = x_sorted, y_sorted
 
-        # p-Wasserstein distance in 1D
-        dist = torch.mean(torch.abs(x_interp - y_interp) ** p) ** (1.0 / p)
-        distances.append(dist)
+        # p-th power of 1D Wasserstein distance
+        dist_p = torch.mean(torch.abs(x_interp - y_interp) ** p)
+        distances.append(dist_p)
 
-    return torch.stack(distances).mean().item()
+    # SW_p = (E[W_p^p])^{1/p}
+    return torch.stack(distances).mean().item() ** (1.0 / p)

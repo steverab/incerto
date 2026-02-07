@@ -117,15 +117,21 @@ class ClassifierShiftDetector(BaseShiftDetector):
 
     def _compute(self, test: torch.Tensor) -> float:
         import numpy as np
+        from sklearn.model_selection import cross_val_predict, StratifiedKFold
 
         X_ref = self._reference.cpu().numpy()
         X_test = test.cpu().numpy()
         X = np.concatenate([X_ref, X_test], axis=0)
         y = np.concatenate([np.zeros(len(X_ref)), np.ones(len(X_test))])
-        self.clf.fit(X, y)
-        proba = self.clf.predict_proba(X_test)[:, 1]
+
+        # Use cross-validation to avoid train/test leakage
+        n_splits = max(2, min(5, len(X_ref), len(X_test)))
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
+        proba = cross_val_predict(self.clf, X, y, cv=cv, method="predict_proba")[:, 1]
+
+        test_proba = proba[len(X_ref) :]
         # Mean output probability should be ~0.5 under no shift
-        return abs(proba.mean() - 0.5) * 2
+        return abs(float(test_proba.mean()) - 0.5) * 2
 
     def state_dict(self) -> dict:
         """Save classifier shift detector state.
@@ -357,14 +363,25 @@ class LabelShiftDetector:
 
     @classmethod
     def load(
-        cls, path: str, num_classes: int, calibrated: bool = False
+        cls, path: str, num_classes: int = 0, calibrated: bool = False
     ) -> "LabelShiftDetector":
-        """Load label shift detector from file."""
+        """Load label shift detector from file.
+
+        Args:
+            path: File path to load the state from.
+            num_classes: Ignored; restored from saved state. Kept for
+                backward compatibility.
+            calibrated: Ignored; restored from saved state. Kept for
+                backward compatibility.
+        """
         from ..exceptions import SerializationError
 
         try:
-            detector = cls(num_classes, calibrated)
             state = torch.load(path, weights_only=True)
+            detector = cls(
+                state.get("num_classes", num_classes),
+                state.get("calibrated", calibrated),
+            )
             detector.load_state_dict(state)
             return detector
         except Exception as e:
@@ -473,7 +490,7 @@ class ImportanceWeightingShift:
 
         result = minimize(
             objective,
-            np.ones(n_s) / n_s,
+            np.ones(n_s),
             bounds=bounds,
             constraints=constraints,
             method="SLSQP",
@@ -517,6 +534,12 @@ class ImportanceWeightingShift:
             return weights
 
         elif self.method == "kernel":
+            if len(source_features) != len(self.weights_model):
+                raise ValueError(
+                    f"Kernel weights are specific to the {len(self.weights_model)} "
+                    f"source samples used in fit(). Got {len(source_features)} samples. "
+                    f"Kernel method does not generalize to new samples."
+                )
             return self.weights_model
 
         else:
