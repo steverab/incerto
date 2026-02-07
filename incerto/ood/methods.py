@@ -91,7 +91,7 @@ class ODIN(OODDetector):
         smax = F.softmax(logits, dim=-1)
         loss = -smax.max(dim=-1).values.mean()
         loss.backward()
-        x_adv = x + self.epsilon * x.grad.sign()
+        x_adv = x - self.epsilon * x.grad.sign()
         with torch.no_grad():
             logits_adv = self.model(x_adv) / self.temperature
         return -F.softmax(logits_adv, dim=-1).max(dim=-1).values
@@ -142,6 +142,7 @@ class Mahalanobis(_FeatureHookMixin, OODDetector):
         ridge = max(1e-6, 1e-6 * cov.diag().mean().item())
         self.precision = torch.linalg.inv(cov + ridge * torch.eye(cov.size(0)))
 
+    @torch.no_grad()
     def score(self, x):
         if self.class_means is None:
             from ..exceptions import NotFittedError
@@ -227,6 +228,7 @@ class KNN(_FeatureHookMixin, OODDetector):
             features.append(self.layer().flatten(1).cpu())
         self.train_features = torch.cat(features)
 
+    @torch.no_grad()
     def score(self, x):
         """Compute OOD score as distance to k-th nearest neighbor."""
         if self.train_features is None:
