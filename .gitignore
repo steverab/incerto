@@ -179,6 +179,7 @@ cython_debug/
 
 .DS_Store
 /data
+/examples/data
 
 # Generated output from examples
 output/
