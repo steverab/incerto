@@ -219,23 +219,31 @@ class MNIST_vs_NotMNIST(OODBenchmark):
 
     def get_datasets(self) -> Tuple[Dataset, Dataset]:
         """Get MNIST (ID) and NotMNIST (OOD) test sets."""
-        transform = self.get_transforms()
+        id_transform = self.get_transforms()
 
         id_dataset = datasets.MNIST(
             root=self.root,
             train=False,
             download=True,
-            transform=transform,
+            transform=id_transform,
         )
 
-        # NotMNIST is not in torchvision, would need custom implementation
-        # For now, we'll use a placeholder
-        # Users should download NotMNIST separately
+        # NotMNIST loaded via ImageFolder produces RGB; convert to grayscale
+        # and resize to match MNIST dimensions
+        ood_transform_list = [
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize(28),
+            transforms.ToTensor(),
+        ]
+        if self.normalize:
+            ood_transform_list.append(transforms.Normalize((0.1307,), (0.3081,)))
+        ood_transform = transforms.Compose(ood_transform_list)
+
         notmnist_path = self.root / "notMNIST"
         if notmnist_path.exists():
             ood_dataset = datasets.ImageFolder(
                 root=notmnist_path,
-                transform=transform,
+                transform=ood_transform,
             )
         else:
             raise FileNotFoundError(
@@ -259,7 +267,7 @@ class SubclassOOD(OODBenchmark):
         root: str | Path = "./data",
         id_classes: List[int] = None,
         ood_classes: List[int] = None,
-        normalize: bool = True,
+        transform: transforms.Compose = None,
         **dataset_kwargs,
     ):
         """
@@ -270,25 +278,30 @@ class SubclassOOD(OODBenchmark):
             root: Data root directory
             id_classes: List of class indices to use as ID
             ood_classes: List of class indices to use as OOD
-            normalize: Whether to normalize
+            transform: Transform to apply (defaults to ToTensor())
             **dataset_kwargs: Additional arguments for dataset
         """
         super().__init__(root)
         self.dataset_class = dataset_class
         self.id_classes = id_classes
         self.ood_classes = ood_classes
-        self.normalize = normalize
+        self.transform = transform if transform is not None else transforms.ToTensor()
         self.dataset_kwargs = dataset_kwargs
 
     def get_datasets(self) -> Tuple[Dataset, Dataset]:
         """Get ID and OOD subsets."""
-        # Load full dataset
-        full_dataset = self.dataset_class(
-            root=self.root,
-            train=False,
-            download=True,
-            **self.dataset_kwargs,
-        )
+        if self.id_classes is None and self.ood_classes is None:
+            raise ValueError(
+                "At least one of id_classes or ood_classes must be specified"
+            )
+
+        # Load full dataset; default to test split if not specified
+        kwargs = dict(root=self.root, download=True, transform=self.transform)
+        if "train" not in self.dataset_kwargs and "split" not in self.dataset_kwargs:
+            kwargs["train"] = False
+        kwargs.update(self.dataset_kwargs)
+
+        full_dataset = self.dataset_class(**kwargs)
 
         # Get targets
         if hasattr(full_dataset, "targets"):
@@ -298,15 +311,22 @@ class SubclassOOD(OODBenchmark):
         else:
             raise ValueError("Dataset must have 'targets' or 'labels' attribute")
 
-        # Find ID and OOD indices
-        id_indices = []
-        ood_indices = []
+        # Auto-complement: if only one side specified, the other gets the rest
+        all_classes = set(np.unique(targets).tolist())
+        id_classes = self.id_classes
+        ood_classes = self.ood_classes
 
-        for idx, target in enumerate(targets):
-            if self.id_classes is not None and target in self.id_classes:
-                id_indices.append(idx)
-            elif self.ood_classes is not None and target in self.ood_classes:
-                ood_indices.append(idx)
+        if id_classes is not None and ood_classes is None:
+            ood_classes = sorted(all_classes - set(id_classes))
+        elif ood_classes is not None and id_classes is None:
+            id_classes = sorted(all_classes - set(ood_classes))
+
+        # Find ID and OOD indices
+        id_set = set(id_classes)
+        ood_set = set(ood_classes)
+
+        id_indices = [idx for idx, t in enumerate(targets) if t in id_set]
+        ood_indices = [idx for idx, t in enumerate(targets) if t in ood_set]
 
         # Create subsets
         id_dataset = Subset(full_dataset, id_indices)
@@ -346,13 +366,13 @@ class CorruptedDataOOD(OODBenchmark):
         """Apply corruption to image."""
         if self.corruption_type == "gaussian_noise":
             noise = torch.randn_like(image) * self.severity
-            return torch.clamp(image + noise, 0, 1)
+            return image + noise
 
         elif self.corruption_type == "salt_pepper":
             mask = torch.rand_like(image)
             corrupted = image.clone()
-            corrupted[mask < self.severity / 2] = 0
-            corrupted[mask > 1 - self.severity / 2] = 1
+            corrupted[mask < self.severity / 2] = 0.0
+            corrupted[mask > 1 - self.severity / 2] = 1.0
             return corrupted
 
         elif self.corruption_type == "blur":

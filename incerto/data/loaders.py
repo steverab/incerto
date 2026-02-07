@@ -9,6 +9,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from typing import Optional, Tuple
 import numpy as np
+from .utils import _get_targets
 
 
 def create_dataloaders(
@@ -64,13 +65,7 @@ def create_dataloaders(
             pin_memory=pin_memory,
         )
 
-    loaders = [train_loader]
-    if val_loader is not None:
-        loaders.append(val_loader)
-    if test_loader is not None:
-        loaders.append(test_loader)
-
-    return tuple(loaders)
+    return train_loader, val_loader, test_loader
 
 
 def create_balanced_dataloader(
@@ -93,29 +88,12 @@ def create_balanced_dataloader(
     Returns:
         DataLoader with balanced sampling
     """
-    from torch.utils.data import Subset
+    targets = _get_targets(dataset)
 
-    # Get targets - handle Subset
-    base_dataset = dataset
-    if isinstance(dataset, Subset):
-        base_dataset = dataset.dataset
-        indices = dataset.indices
-    else:
-        indices = list(range(len(dataset)))
-
-    if hasattr(base_dataset, "targets"):
-        all_targets = np.array(base_dataset.targets)
-        targets = all_targets[indices]
-    elif hasattr(base_dataset, "labels"):
-        all_targets = np.array(base_dataset.labels)
-        targets = all_targets[indices]
-    else:
-        raise ValueError("Dataset must have 'targets' or 'labels' attribute")
-
-    # Compute class weights
-    class_counts = np.bincount(targets)
-    class_weights = 1.0 / class_counts
-    sample_weights = class_weights[targets]
+    # Compute class weights (use np.unique to avoid division by zero with non-contiguous classes)
+    unique_classes, class_counts = np.unique(targets, return_counts=True)
+    class_weight_map = dict(zip(unique_classes, 1.0 / class_counts))
+    sample_weights = np.array([class_weight_map[t] for t in targets])
 
     # Create sampler
     sampler = WeightedRandomSampler(
@@ -341,16 +319,12 @@ def get_dataloader_stats(dataloader: DataLoader) -> dict:
         stats["dataset_size"] = len(dataloader.dataset)
 
     # Try to get class distribution
-    dataset = dataloader.dataset
-    if hasattr(dataset, "targets"):
-        targets = np.array(dataset.targets)
+    try:
+        targets = _get_targets(dataloader.dataset)
         unique, counts = np.unique(targets, return_counts=True)
         stats["num_classes"] = len(unique)
         stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
-    elif hasattr(dataset, "labels"):
-        labels = np.array(dataset.labels)
-        unique, counts = np.unique(labels, return_counts=True)
-        stats["num_classes"] = len(unique)
-        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
+    except ValueError:
+        pass  # Dataset has no targets/labels attribute
 
     return stats

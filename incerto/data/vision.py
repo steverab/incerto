@@ -18,6 +18,7 @@ except ImportError:
     )
 from typing import Tuple
 from pathlib import Path
+from .utils import TransformDataset
 
 
 class VisionDataset:
@@ -103,12 +104,11 @@ class MNIST(VisionDataset):
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
 
-        # Load full training set
+        # Load without transforms so train/val get different pipelines
         full_train = datasets.MNIST(
             root=self.root,
             train=True,
             download=True,
-            transform=train_transform,
         )
 
         # Load test set
@@ -119,8 +119,10 @@ class MNIST(VisionDataset):
             transform=test_transform,
         )
 
-        # Split train into train/val
-        train_dataset, val_dataset = self._split_train_val(full_train)
+        # Split first, then apply appropriate transforms
+        train_subset, val_subset = self._split_train_val(full_train)
+        train_dataset = TransformDataset(train_subset, train_transform)
+        val_dataset = TransformDataset(val_subset, test_transform)
 
         return train_dataset, val_dataset, test_dataset
 
@@ -158,11 +160,11 @@ class FashionMNIST(VisionDataset):
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
 
+        # Load without transforms so train/val get different pipelines
         full_train = datasets.FashionMNIST(
             root=self.root,
             train=True,
             download=True,
-            transform=train_transform,
         )
 
         test_dataset = datasets.FashionMNIST(
@@ -172,7 +174,10 @@ class FashionMNIST(VisionDataset):
             transform=test_transform,
         )
 
-        train_dataset, val_dataset = self._split_train_val(full_train)
+        # Split first, then apply appropriate transforms
+        train_subset, val_subset = self._split_train_val(full_train)
+        train_dataset = TransformDataset(train_subset, train_transform)
+        val_dataset = TransformDataset(val_subset, test_transform)
 
         return train_dataset, val_dataset, test_dataset
 
@@ -227,11 +232,11 @@ class CIFAR10(VisionDataset):
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
 
+        # Load without transforms so train/val get different pipelines
         full_train = datasets.CIFAR10(
             root=self.root,
             train=True,
             download=True,
-            transform=train_transform,
         )
 
         test_dataset = datasets.CIFAR10(
@@ -241,7 +246,10 @@ class CIFAR10(VisionDataset):
             transform=test_transform,
         )
 
-        train_dataset, val_dataset = self._split_train_val(full_train)
+        # Split first, then apply appropriate transforms
+        train_subset, val_subset = self._split_train_val(full_train)
+        train_dataset = TransformDataset(train_subset, train_transform)
+        val_dataset = TransformDataset(val_subset, test_transform)
 
         return train_dataset, val_dataset, test_dataset
 
@@ -296,11 +304,11 @@ class CIFAR100(VisionDataset):
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
 
+        # Load without transforms so train/val get different pipelines
         full_train = datasets.CIFAR100(
             root=self.root,
             train=True,
             download=True,
-            transform=train_transform,
         )
 
         test_dataset = datasets.CIFAR100(
@@ -310,7 +318,10 @@ class CIFAR100(VisionDataset):
             transform=test_transform,
         )
 
-        train_dataset, val_dataset = self._split_train_val(full_train)
+        # Split first, then apply appropriate transforms
+        train_subset, val_subset = self._split_train_val(full_train)
+        train_dataset = TransformDataset(train_subset, train_transform)
+        val_dataset = TransformDataset(val_subset, test_transform)
 
         return train_dataset, val_dataset, test_dataset
 
@@ -353,11 +364,11 @@ class SVHN(VisionDataset):
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
 
+        # Load without transforms so train/val get different pipelines
         full_train = datasets.SVHN(
             root=self.root,
             split="train",
             download=True,
-            transform=train_transform,
         )
 
         test_dataset = datasets.SVHN(
@@ -367,6 +378,9 @@ class SVHN(VisionDataset):
             transform=test_transform,
         )
 
-        train_dataset, val_dataset = self._split_train_val(full_train)
+        # Split first, then apply appropriate transforms
+        train_subset, val_subset = self._split_train_val(full_train)
+        train_dataset = TransformDataset(train_subset, train_transform)
+        val_dataset = TransformDataset(val_subset, test_transform)
 
         return train_dataset, val_dataset, test_dataset

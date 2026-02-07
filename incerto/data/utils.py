@@ -11,6 +11,33 @@ from typing import List, Optional, Callable
 import numpy as np
 
 
+def _get_targets(dataset: Dataset) -> np.ndarray:
+    """Extract target labels from a dataset, handling nested Subset/TransformDataset wrapping."""
+    indices = None
+    current = dataset
+    while isinstance(current, (Subset, TransformDataset)):
+        if isinstance(current, Subset):
+            subset_indices = np.array(current.indices)
+            if indices is None:
+                indices = subset_indices
+            else:
+                indices = subset_indices[indices]
+            current = current.dataset
+        elif isinstance(current, TransformDataset):
+            current = current.dataset
+
+    if hasattr(current, "targets"):
+        all_targets = np.array(current.targets)
+    elif hasattr(current, "labels"):
+        all_targets = np.array(current.labels)
+    else:
+        raise ValueError("Dataset must have 'targets' or 'labels' attribute")
+
+    if indices is not None:
+        return all_targets[indices]
+    return all_targets
+
+
 def split_dataset(
     dataset: Dataset,
     splits: List[float],
@@ -71,13 +98,7 @@ def filter_dataset_by_class(
     Returns:
         Subset containing filtered samples
     """
-    # Get targets
-    if hasattr(dataset, "targets"):
-        targets = np.array(dataset.targets)
-    elif hasattr(dataset, "labels"):
-        targets = np.array(dataset.labels)
-    else:
-        raise ValueError("Dataset must have 'targets' or 'labels' attribute")
+    targets = _get_targets(dataset)
 
     # Find matching indices
     if invert:
@@ -106,13 +127,7 @@ def get_class_balanced_subset(
     Returns:
         Balanced subset
     """
-    # Get targets
-    if hasattr(dataset, "targets"):
-        targets = np.array(dataset.targets)
-    elif hasattr(dataset, "labels"):
-        targets = np.array(dataset.labels)
-    else:
-        raise ValueError("Dataset must have 'targets' or 'labels' attribute")
+    targets = _get_targets(dataset)
 
     rng = np.random.default_rng(seed)
 
@@ -153,18 +168,9 @@ def compute_dataset_statistics(
         "size": len(dataset),
     }
 
-    # Get targets - handle Subset
-    base_dataset = dataset
-    if isinstance(dataset, Subset):
-        base_dataset = dataset.dataset
-        indices = dataset.indices
-    else:
-        indices = list(range(len(dataset)))
-
     # Class distribution
-    if hasattr(base_dataset, "targets"):
-        all_targets = np.array(base_dataset.targets)
-        targets = all_targets[indices]
+    try:
+        targets = _get_targets(dataset)
         unique, counts = np.unique(targets, return_counts=True)
         stats["num_classes"] = len(unique)
         stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
@@ -172,16 +178,8 @@ def compute_dataset_statistics(
         stats["max_class_size"] = int(counts.max())
         stats["mean_class_size"] = float(counts.mean())
         stats["class_balance_ratio"] = float(counts.min() / counts.max())
-    elif hasattr(base_dataset, "labels"):
-        all_labels = np.array(base_dataset.labels)
-        labels = all_labels[indices]
-        unique, counts = np.unique(labels, return_counts=True)
-        stats["num_classes"] = len(unique)
-        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
-        stats["min_class_size"] = int(counts.min())
-        stats["max_class_size"] = int(counts.max())
-        stats["mean_class_size"] = float(counts.mean())
-        stats["class_balance_ratio"] = float(counts.min() / counts.max())
+    except ValueError:
+        pass  # Dataset has no targets/labels attribute
 
     return stats
 
@@ -204,13 +202,7 @@ def create_imbalanced_dataset(
     Returns:
         Imbalanced subset
     """
-    # Get targets
-    if hasattr(dataset, "targets"):
-        targets = np.array(dataset.targets)
-    elif hasattr(dataset, "labels"):
-        targets = np.array(dataset.labels)
-    else:
-        raise ValueError("Dataset must have 'targets' or 'labels' attribute")
+    targets = _get_targets(dataset)
 
     rng = np.random.default_rng(seed)
 
@@ -305,13 +297,7 @@ class LabelNoiseDataset(Dataset):
         self.noise_rate = noise_rate
         self.seed = seed
 
-        # Get original labels
-        if hasattr(dataset, "targets"):
-            self.original_labels = np.array(dataset.targets)
-        elif hasattr(dataset, "labels"):
-            self.original_labels = np.array(dataset.labels)
-        else:
-            raise ValueError("Dataset must have 'targets' or 'labels' attribute")
+        self.original_labels = _get_targets(dataset)
 
         # Determine number of classes
         if num_classes is None:
@@ -348,7 +334,7 @@ class LabelNoiseDataset(Dataset):
 
     def __getitem__(self, idx):
         data, _ = self.dataset[idx]  # Ignore original label
-        noisy_label = self.noisy_labels[idx]
+        noisy_label = int(self.noisy_labels[idx])
         return data, noisy_label
 
 
