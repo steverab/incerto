@@ -238,9 +238,9 @@ class ContrastiveDecoding:
         alpha: float = 0.5,
     ) -> torch.Tensor:
         """
-        Compute contrastive decoding score.
+        Compute contrastive decoding score in log-space.
 
-        Score = expert_prob - alpha * amateur_prob
+        Score = log(expert_prob) - alpha * log(amateur_prob)
 
         Args:
             expert_logits: Logits from expert/strong model
@@ -248,14 +248,14 @@ class ContrastiveDecoding:
             alpha: Weight for amateur contribution
 
         Returns:
-            Contrastive scores
+            Contrastive scores (log-space)
         """
         import torch.nn.functional as F
 
-        expert_probs = F.softmax(expert_logits, dim=-1)
-        amateur_probs = F.softmax(amateur_logits, dim=-1)
+        expert_log_probs = F.log_softmax(expert_logits, dim=-1)
+        amateur_log_probs = F.log_softmax(amateur_logits, dim=-1)
 
-        contrastive_scores = expert_probs - alpha * amateur_probs
+        contrastive_scores = expert_log_probs - alpha * amateur_log_probs
 
         return contrastive_scores
 

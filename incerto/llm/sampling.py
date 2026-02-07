@@ -295,7 +295,7 @@ class SemanticEntropy:
                 clusters[i] = cluster_id
                 # Add similar responses to same cluster
                 for j in range(i + 1, len(responses)):
-                    if similarities[i, j] >= similarity_threshold:
+                    if clusters[j] == -1 and similarities[i, j] >= similarity_threshold:
                         clusters[j] = cluster_id
                 cluster_id += 1
 

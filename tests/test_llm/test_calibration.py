@@ -121,16 +121,15 @@ class TestVerbosityBiasCorrection:
 
         corrector.fit(lengths, confidences)
 
-        # After fitting, mean_length should be set
-        assert corrector.mean_length is not None
+        # After fitting, bin_edges should be set
+        assert corrector.bin_edges is not None
 
-        # Longer than mean should get reduced confidence
-        mean_length = corrector.mean_length
-        long_corrected = corrector.correct(int(mean_length * 2), 0.9)
+        # Longer responses (higher bin confidence) should get reduced confidence
+        long_corrected = corrector.correct(50, 0.9)
         assert long_corrected < 0.9
 
-        # Shorter than mean should get increased confidence
-        short_corrected = corrector.correct(int(mean_length / 2), 0.5)
+        # Shorter responses (lower bin confidence) should get increased confidence
+        short_corrected = corrector.correct(10, 0.5)
         assert short_corrected > 0.5
 
     def test_correct_clamping(self):

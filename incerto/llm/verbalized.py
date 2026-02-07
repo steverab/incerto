@@ -107,6 +107,7 @@ Provide only the numerical probability value."""
             r"(\d+\.\d+)",  # 0.85
             r"(\d+)%",  # 85%
             r"(\d+)\s+percent",  # 85 percent
+            r"\b([01])\b",  # standalone 0 or 1
         ]
 
         for pattern in patterns:

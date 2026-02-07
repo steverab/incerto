@@ -115,8 +115,9 @@ class VerbosityBiasCorrection:
     """
 
     def __init__(self):
-        self.mean_length = None
-        self.length_to_confidence = {}
+        self.mean_confidence = None
+        self.bin_edges = None
+        self.bin_mean_confidences = None
 
     def fit(self, lengths: list[int], confidences: list[float]):
         """
@@ -128,18 +129,28 @@ class VerbosityBiasCorrection:
         """
         import numpy as np
 
-        # Bin by length and compute average confidence
-        length_array = np.array(lengths)
-        conf_array = np.array(confidences)
+        length_array = np.array(lengths, dtype=float)
+        conf_array = np.array(confidences, dtype=float)
 
-        self.mean_length = length_array.mean()
+        self.mean_confidence = conf_array.mean()
 
-        # Create bins
-        bins = np.percentile(length_array, [0, 25, 50, 75, 100])
-        for i in range(len(bins) - 1):
-            mask = (length_array >= bins[i]) & (length_array < bins[i + 1])
+        # Create quartile bins by length
+        self.bin_edges = np.percentile(length_array, [0, 25, 50, 75, 100])
+        self.bin_mean_confidences = []
+
+        for i in range(len(self.bin_edges) - 1):
+            if i < len(self.bin_edges) - 2:
+                mask = (length_array >= self.bin_edges[i]) & (
+                    length_array < self.bin_edges[i + 1]
+                )
+            else:
+                mask = (length_array >= self.bin_edges[i]) & (
+                    length_array <= self.bin_edges[i + 1]
+                )
             if mask.sum() > 0:
-                self.length_to_confidence[i] = conf_array[mask].mean()
+                self.bin_mean_confidences.append(conf_array[mask].mean())
+            else:
+                self.bin_mean_confidences.append(self.mean_confidence)
 
     def correct(self, length: int, confidence: float) -> float:
         """
@@ -152,12 +163,21 @@ class VerbosityBiasCorrection:
         Returns:
             Corrected confidence
         """
-        if self.mean_length is None:
+        if self.bin_edges is None:
             return confidence
 
-        # Simple linear correction based on deviation from mean
-        length_factor = length / self.mean_length
-        corrected = confidence / length_factor
+        import numpy as np
+
+        # Find which length bin this falls into
+        bin_idx = np.digitize(length, self.bin_edges) - 1
+        bin_idx = np.clip(bin_idx, 0, len(self.bin_mean_confidences) - 1)
+
+        # Correct by the ratio of overall mean confidence to bin mean confidence
+        bin_mean = self.bin_mean_confidences[bin_idx]
+        if bin_mean > 0:
+            corrected = confidence * (self.mean_confidence / bin_mean)
+        else:
+            corrected = confidence
 
         return max(0.0, min(1.0, corrected))
 
