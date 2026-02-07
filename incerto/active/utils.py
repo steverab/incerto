@@ -110,7 +110,7 @@ def compute_diversity_penalty(
         cov = torch.cov(selected_features.T)
         try:
             det = torch.linalg.det(cov)
-            return -torch.log(det + 1e-10)  # Negative log for penalty
+            return -torch.log(det.clamp(min=1e-10))  # Negative log for penalty
         except Exception:
             return torch.tensor(0.0, device=features.device)
 
@@ -202,7 +202,6 @@ def active_learning_loop(
     y_pool: torch.Tensor,
     strategy,
     num_rounds: int = 10,
-    batch_size: int = 100,
     initial_labeled: int = 100,
     train_fn: Optional[callable] = None,
     eval_fn: Optional[callable] = None,
@@ -215,9 +214,8 @@ def active_learning_loop(
         model: Model to train
         x_pool: Full data pool
         y_pool: Full labels
-        strategy: Query strategy
+        strategy: Query strategy (batch size is controlled by the strategy)
         num_rounds: Number of active learning rounds
-        batch_size: Samples to label per round
         initial_labeled: Number of initial labeled samples
         train_fn: Function to train model (model, x_train, y_train)
         eval_fn: Function to evaluate model (model, x_test, y_test)

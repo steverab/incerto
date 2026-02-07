@@ -70,13 +70,17 @@ class EntropyAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute entropy scores."""
-        model.eval()
-        logits = model(x)
-        probs = F.softmax(logits, dim=-1)
+        was_training = model.training
+        try:
+            model.eval()
+            logits = model(x)
+            probs = F.softmax(logits, dim=-1)
 
-        # Entropy: -∑ p log p
-        entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1)
-        return entropy
+            # Entropy: -∑ p log p
+            entropy = -(probs * torch.log(probs + 1e-10)).sum(dim=-1)
+            return entropy
+        finally:
+            model.train(was_training)
 
 
 class LeastConfidenceAcquisition(BaseAcquisition):
@@ -97,13 +101,17 @@ class LeastConfidenceAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute least confidence scores."""
-        model.eval()
-        logits = model(x)
-        probs = F.softmax(logits, dim=-1)
+        was_training = model.training
+        try:
+            model.eval()
+            logits = model(x)
+            probs = F.softmax(logits, dim=-1)
 
-        # Least confidence: 1 - max(p)
-        max_probs, _ = probs.max(dim=-1)
-        return 1.0 - max_probs
+            # Least confidence: 1 - max(p)
+            max_probs, _ = probs.max(dim=-1)
+            return 1.0 - max_probs
+        finally:
+            model.train(was_training)
 
 
 class MarginAcquisition(BaseAcquisition):
@@ -124,23 +132,27 @@ class MarginAcquisition(BaseAcquisition):
         **kwargs,
     ) -> torch.Tensor:
         """Compute margin scores."""
-        model.eval()
-        logits = model(x)
-        probs = F.softmax(logits, dim=-1)
+        was_training = model.training
+        try:
+            model.eval()
+            logits = model(x)
+            probs = F.softmax(logits, dim=-1)
 
-        # Guard: need at least 2 classes for margin
-        if probs.size(-1) < 2:
-            # Single class: no margin, return zeros (no uncertainty)
-            return torch.zeros(len(x), device=x.device)
+            # Guard: need at least 2 classes for margin
+            if probs.size(-1) < 2:
+                # Single class: no margin, return zeros (no uncertainty)
+                return torch.zeros(len(x), device=x.device)
 
-        # Sort probabilities
-        sorted_probs, _ = torch.sort(probs, descending=True, dim=-1)
+            # Sort probabilities
+            sorted_probs, _ = torch.sort(probs, descending=True, dim=-1)
 
-        # Margin: difference between top-2
-        margin = sorted_probs[:, 0] - sorted_probs[:, 1]
+            # Margin: difference between top-2
+            margin = sorted_probs[:, 0] - sorted_probs[:, 1]
 
-        # Return negative margin (higher = smaller margin = more uncertain)
-        return -margin
+            # Return negative margin (higher = smaller margin = more uncertain)
+            return -margin
+        finally:
+            model.train(was_training)
 
 
 class BALDAcquisition(BaseAcquisition):
