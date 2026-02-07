@@ -199,8 +199,9 @@ def aps(
     Adaptive Prediction Sets (APS)
     — Romano, Patterson, and Candes, *NeurIPS 2020*.
 
-    Produces variable-sized sets by thresholding cumulative probability mass
-    up to and including the true label, calibrated on held-out data.
+    Produces variable-sized sets by thresholding randomized cumulative
+    probability mass, calibrated on held-out data.  Randomized scores
+    yield tight (non-conservative) coverage guarantees.
     """
     _validate_alpha(alpha)
     model.eval()
@@ -213,8 +214,14 @@ def aps(
 
         # Find where true label appears in sorted order
         ranks = (idx_sorted == y.unsqueeze(-1)).nonzero(as_tuple=True)[1]
-        # Score is cumulative probability up to and including true label
-        scores.append(cumprobs[torch.arange(len(y)), ranks])
+        # Randomised score: cumprob *before* the true label + U·prob_true
+        U = torch.rand(len(y), device=probs.device)
+        cumprobs_prev = torch.zeros_like(cumprobs)
+        cumprobs_prev[:, 1:] = cumprobs[:, :-1]
+        scores.append(
+            cumprobs_prev[torch.arange(len(y)), ranks]
+            + U * probs_sorted[torch.arange(len(y)), ranks]
+        )
 
     all_scores = torch.cat(scores)
     qhat = _conformal_quantile(all_scores, alpha)
@@ -227,13 +234,14 @@ def aps(
                 torch.softmax(logits, dim=-1), descending=True, dim=-1
             )
             cumprobs = probs.cumsum(dim=-1)
-            # Include classes until cumulative probability exceeds threshold
+            # Randomised inclusion matching the calibration score
+            V = torch.rand(x.size(0), 1, device=probs.device)
+            cumprobs_prev = torch.zeros_like(cumprobs)
+            cumprobs_prev[:, 1:] = cumprobs[:, :-1]
+            randomized = cumprobs_prev + V * probs
             sets = []
-            for idx_i, cumprobs_i in zip(idx, cumprobs):
-                s = idx_i[cumprobs_i <= qhat]
-                if len(s) == 0:
-                    s = idx_i[:1]  # always include the most probable class
-                sets.append(s)
+            for idx_i, rand_i in zip(idx, randomized):
+                sets.append(idx_i[rand_i <= qhat])
             return sets
 
     return predictor
