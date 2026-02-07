@@ -83,6 +83,8 @@ class MCDropout(BaseBayesianMethod):
         dropout_rate: float = 0.1,
     ):
         super().__init__()
+        if dropout_rate is not None and not (0 <= dropout_rate < 1):
+            raise ValueError(f"dropout_rate must be in [0, 1), got {dropout_rate}")
         self.model = model
         self.num_samples = num_samples
         self.dropout_rate = dropout_rate
@@ -94,7 +96,9 @@ class MCDropout(BaseBayesianMethod):
         """Enable dropout at test time and optionally set dropout rate."""
         found = False
         for module in self.model.modules():
-            if isinstance(module, nn.Dropout):
+            if isinstance(
+                module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout)
+            ):
                 module.train()
                 # Override dropout rate if specified
                 if self.dropout_rate is not None:
@@ -118,6 +122,7 @@ class MCDropout(BaseBayesianMethod):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
+        normalize_output: bool = True,
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -128,18 +133,21 @@ class MCDropout(BaseBayesianMethod):
         Args:
             x: Input tensor ``(N, ...)``
             return_samples: If True, return all MC samples
+            normalize_output: If True, apply softmax to 2-D multi-column
+                outputs (i.e. treat them as logits).  Set to False when
+                the model already returns probabilities or when outputs
+                are not classification logits.
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
             If return_samples=True: (mean, variance, samples)
         """
         self._enable_dropout()
-
         samples = []
         for _ in range(self.num_samples):
             output = self.model(x)
             # Convert logits to probabilities for classification
-            if output.dim() == 2 and output.size(-1) > 1:
+            if normalize_output and output.dim() == 2 and output.size(-1) > 1:
                 output = F.softmax(output, dim=-1)
             samples.append(output)
 
@@ -227,6 +235,10 @@ class DeepEnsemble(BaseBayesianMethod):
         num_models: int = 5,
     ):
         super().__init__()
+        if not callable(model_fn):
+            raise TypeError("model_fn must be callable")
+        if num_models < 1:
+            raise ValueError(f"num_models must be >= 1, got {num_models}")
         self.num_models = num_models
         self.models = nn.ModuleList([model_fn() for _ in range(num_models)])
 
@@ -254,6 +266,7 @@ class DeepEnsemble(BaseBayesianMethod):
         x: torch.Tensor,
         return_samples: bool = False,
         return_all: bool = False,
+        normalize_output: bool = True,
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -265,6 +278,10 @@ class DeepEnsemble(BaseBayesianMethod):
             x: Input tensor ``(N, ...)``
             return_samples: If True, return all individual predictions
             return_all: Deprecated alias for return_samples
+            normalize_output: If True, apply softmax to 2-D multi-column
+                outputs (i.e. treat them as logits).  Set to False when
+                the model already returns probabilities or when outputs
+                are not classification logits.
 
         Returns:
             Tuple of (mean_prediction, epistemic_variance).
@@ -279,7 +296,7 @@ class DeepEnsemble(BaseBayesianMethod):
             model.eval()
             output = model(x)
             # Convert to probabilities for classification
-            if output.dim() == 2 and output.size(-1) > 1:
+            if normalize_output and output.dim() == 2 and output.size(-1) > 1:
                 output = F.softmax(output, dim=-1)
             predictions.append(output)
 
@@ -397,6 +414,13 @@ class SWAG(BaseBayesianMethod):
             self.mean[name] = torch.zeros_like(param.data)
             self.sq_mean[name] = torch.zeros_like(param.data)
 
+    def _apply(self, fn):
+        """Override to move SWAG statistics with .to() / .cuda() / etc."""
+        super()._apply(fn)
+        self.mean = {name: fn(tensor) for name, tensor in self.mean.items()}
+        self.sq_mean = {name: fn(tensor) for name, tensor in self.sq_mean.items()}
+        return self
+
     def collect_model(self, model: nn.Module):
         """
         Collect model statistics for SWAG.
@@ -476,6 +500,7 @@ class SWAG(BaseBayesianMethod):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
+        normalize_output: bool = True,
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -486,6 +511,10 @@ class SWAG(BaseBayesianMethod):
         Args:
             x: Input tensor ``(N, ...)``
             return_samples: If True, return all sampled predictions
+            normalize_output: If True, apply softmax to 2-D multi-column
+                outputs (i.e. treat them as logits).  Set to False when
+                the model already returns probabilities or when outputs
+                are not classification logits.
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
@@ -514,7 +543,7 @@ class SWAG(BaseBayesianMethod):
 
                 # Forward pass
                 output = self.model(x)
-                if output.dim() == 2 and output.size(-1) > 1:
+                if normalize_output and output.dim() == 2 and output.size(-1) > 1:
                     output = F.softmax(output, dim=-1)
                 predictions.append(output)
         finally:
@@ -574,13 +603,27 @@ class LaplaceApproximation(BaseBayesianMethod):
         self.posterior_precision = None
         self.mean = None
 
+    def _apply(self, fn):
+        """Override to move Laplace statistics with .to() / .cuda() / etc."""
+        super()._apply(fn)
+        if self.mean is not None:
+            self.mean = {name: fn(tensor) for name, tensor in self.mean.items()}
+        if self.posterior_precision is not None:
+            self.posterior_precision = {
+                name: fn(tensor) for name, tensor in self.posterior_precision.items()
+            }
+        return self
+
     def _compute_hessian_diag(
         self,
         data_loader: DataLoader,
         device: str | None = None,
     ) -> dict:
         """
-        Compute diagonal of the empirical Fisher (GGN approximation).
+        Compute diagonal of the empirical Fisher via per-sample gradients.
+
+        Each sample's gradient is squared individually and then averaged,
+        giving an unbiased estimate of the Fisher diagonal.
 
         Args:
             data_loader: Data loader for computing Hessian
@@ -600,33 +643,33 @@ class LaplaceApproximation(BaseBayesianMethod):
         self.model.to(device)
         self.model.eval()
 
+        n_samples = 0
         for batch_x, batch_y in data_loader:
             batch_x, batch_y = batch_x.to(device), batch_y.to(device)
 
-            # Zero gradients before forward pass
-            self.model.zero_grad()
+            # Per-sample gradients for an unbiased Fisher diagonal
+            for i in range(len(batch_x)):
+                self.model.zero_grad()
+                output = self.model(batch_x[i : i + 1])
 
-            # Forward pass
-            outputs = self.model(batch_x)
+                if self.likelihood == "classification":
+                    loss = F.cross_entropy(output, batch_y[i : i + 1])
+                else:  # regression — Gaussian NLL with unit variance
+                    loss = 0.5 * F.mse_loss(
+                        output.squeeze(), batch_y[i : i + 1].float()
+                    )
 
-            if self.likelihood == "classification":
-                # Compute gradient of cross-entropy loss
-                loss = F.cross_entropy(outputs, batch_y)
-            else:  # regression
-                # For regression with Gaussian likelihood
-                loss = F.mse_loss(outputs.squeeze(), batch_y.float())
+                loss.backward()
 
-            loss.backward()
+                for name, param in self.model.named_parameters():
+                    if param.grad is not None:
+                        hessian_diag[name] += param.grad.data**2
 
-            # Accumulate squared gradients (Fisher diagonal approximation)
-            for name, param in self.model.named_parameters():
-                if param.grad is not None:
-                    hessian_diag[name] += param.grad.data**2
+                n_samples += 1
 
-        # Average over dataset
-        num_batches = len(data_loader)
+        # Average over all samples
         for name in hessian_diag:
-            hessian_diag[name] /= num_batches
+            hessian_diag[name] /= n_samples
 
         return hessian_diag
 
@@ -658,6 +701,7 @@ class LaplaceApproximation(BaseBayesianMethod):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
+        normalize_output: bool = True,
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -668,6 +712,10 @@ class LaplaceApproximation(BaseBayesianMethod):
         Args:
             x: Input tensor ``(N, ...)``
             return_samples: If True, return all sampled predictions
+            normalize_output: If True, apply softmax to 2-D multi-column
+                outputs (i.e. treat them as logits).  Set to False when
+                the model already returns probabilities or when outputs
+                are not classification logits.
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
@@ -694,7 +742,7 @@ class LaplaceApproximation(BaseBayesianMethod):
                     param.data = self.mean[name] + torch.randn_like(std) * std
 
                 output = self.model(x)
-                if output.dim() == 2 and output.size(-1) > 1:
+                if normalize_output and output.dim() == 2 and output.size(-1) > 1:
                     output = F.softmax(output, dim=-1)
                 predictions.append(output)
         finally:
@@ -751,6 +799,11 @@ class VariationalBayesNN(BaseBayesianMethod):
 
     Learns a distribution over weights using variational inference.
     Each weight has a learned mean and variance.
+
+    .. note::
+        ``variational_loss`` currently uses cross-entropy and therefore
+        only supports **classification** tasks.  For regression, provide
+        a custom training loop with an appropriate likelihood.
 
     Reference:
         Blundell et al., "Weight Uncertainty in Neural Networks" (ICML 2015)
@@ -849,6 +902,7 @@ class VariationalBayesNN(BaseBayesianMethod):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
+        normalize_output: bool = True,
     ) -> Union[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -859,6 +913,10 @@ class VariationalBayesNN(BaseBayesianMethod):
         Args:
             x: Input tensor
             return_samples: If True, return all sampled predictions
+            normalize_output: If True, apply softmax to 2-D multi-column
+                outputs (i.e. treat them as logits).  Set to False when
+                the model already returns probabilities or when outputs
+                are not classification logits.
 
         Returns:
             Tuple of (mean_prediction, predictive_variance)
@@ -867,7 +925,7 @@ class VariationalBayesNN(BaseBayesianMethod):
         predictions = []
         for _ in range(self.num_samples):
             output = self.forward(x)
-            if output.dim() == 2 and output.size(-1) > 1:
+            if normalize_output and output.dim() == 2 and output.size(-1) > 1:
                 output = F.softmax(output, dim=-1)
             predictions.append(output)
 

@@ -99,8 +99,6 @@ def expected_calibration_error(
         >>> # For ensemble predictions
         >>> ensemble_preds = torch.softmax(torch.randn(10, 32, 5), dim=-1)
         >>> mean_preds = ensemble_preds.mean(dim=0)
-        >>> # Convert to logits for ECE
-        >>> logits = torch.log(mean_preds + 1e-10)
         >>> ece = expected_calibration_error(mean_preds, labels, n_bins=10)
 
     See Also:
