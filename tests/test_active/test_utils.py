@@ -231,7 +231,6 @@ class TestActiveLearningLoop:
             y_pool,
             strategy,
             num_rounds=3,
-            batch_size=5,
             initial_labeled=10,
             train_fn=train_fn,
             eval_fn=eval_fn,
@@ -263,7 +262,6 @@ class TestActiveLearningLoop:
             y_pool,
             strategy,
             num_rounds=10,
-            batch_size=5,
             initial_labeled=5,
             random_seed=0,
         )

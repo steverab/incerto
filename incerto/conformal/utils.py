@@ -3,6 +3,7 @@ Utility functions for conformal prediction methods.
 """
 
 from __future__ import annotations
+import math
 import torch
 
 
@@ -12,20 +13,26 @@ def compute_quantile(
     """
     Compute the conformal quantile at level (1 - alpha).
 
+    Uses exact order-statistic indexing (ceil-quantile) rather than
+    interpolation, which is required for the finite-sample coverage
+    guarantee to hold.
+
     Args:
         scores: Conformity scores from calibration set.
         alpha: Desired miscoverage rate.
-        adjusted: If True, uses the finite-sample correction (n+1)/n.
+        adjusted: If True, uses the finite-sample correction ⌈(1-α)(n+1)⌉.
 
     Returns:
         Quantile threshold.
     """
     n = len(scores)
+    sorted_scores = torch.sort(scores)[0]
     if adjusted:
-        level = min((1.0 - alpha) * (1.0 + 1.0 / n), 1.0)
+        k = math.ceil((1 - alpha) * (n + 1))
     else:
-        level = 1.0 - alpha
-    return torch.quantile(scores, level).item()
+        k = math.ceil((1 - alpha) * n)
+    k = max(1, min(k, n))
+    return sorted_scores[k - 1].item()
 
 
 def prediction_set_from_scores(

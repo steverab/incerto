@@ -75,9 +75,12 @@ def calibration_error(
     ece = 0.0
     mce = 0.0
 
-    for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+    for i, (bin_lower, bin_upper) in enumerate(zip(bin_lowers, bin_uppers)):
         # Find samples in this bin
-        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
+        if i == 0:
+            in_bin = (confidences >= bin_lower) & (confidences <= bin_upper)
+        else:
+            in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
         prop_in_bin = in_bin.mean()
 
         if prop_in_bin > 0:

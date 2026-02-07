@@ -66,8 +66,10 @@ class BaseShiftDetector(ABC):
             >>> detector.fit(train_loader).score(test_loader)
         """
         reference = torch.cat([x[0].detach() for x in reference_loader])
-        # Flatten to 2D if multi-dimensional (for image data)
-        if reference.ndim > 2:
+        # Ensure at least 2D (n, d)
+        if reference.ndim == 1:
+            reference = reference.unsqueeze(1)
+        elif reference.ndim > 2:
             reference = reference.flatten(1)
         self._reference = reference
         return self
@@ -101,8 +103,10 @@ class BaseShiftDetector(ABC):
             )
 
         test_batch = torch.cat([x[0].detach() for x in test_loader])
-        # Flatten to 2D if multi-dimensional (for image data)
-        if test_batch.ndim > 2:
+        # Ensure at least 2D (n, d)
+        if test_batch.ndim == 1:
+            test_batch = test_batch.unsqueeze(1)
+        elif test_batch.ndim > 2:
             test_batch = test_batch.flatten(1)
         return self._compute(test_batch)
 

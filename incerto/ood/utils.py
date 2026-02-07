@@ -97,6 +97,7 @@ def extract_features(
                     x = batch[0]
                 else:
                     x = batch
+                x = x.to(next(model.parameters()).device)
                 model(x)
                 if matched_name in activation:
                     features.append(activation[matched_name].flatten(1).cpu())

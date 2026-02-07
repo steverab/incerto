@@ -107,12 +107,16 @@ class DiversitySampling:
 
         # Extract features if not provided
         if features is None:
-            with torch.no_grad():
-                model.eval()
-                # Use model embeddings as features
-                features = model(x_unlabeled)
-                if features.dim() > 2:
-                    features = features.flatten(1)
+            was_training = model.training
+            try:
+                with torch.no_grad():
+                    model.eval()
+                    # Use model embeddings as features
+                    features = model(x_unlabeled)
+                    if features.dim() > 2:
+                        features = features.flatten(1)
+            finally:
+                model.train(was_training)
 
         # Normalize scores
         uncertainty_scores = (uncertainty_scores - uncertainty_scores.min()) / (
@@ -201,19 +205,23 @@ class CoreSetSelection:
             Indices of selected samples
         """
         # Extract features
-        if features_unlabeled is None:
-            with torch.no_grad():
-                model.eval()
-                features_unlabeled = model(x_unlabeled)
-                if features_unlabeled.dim() > 2:
-                    features_unlabeled = features_unlabeled.flatten(1)
+        was_training = model.training
+        try:
+            if features_unlabeled is None:
+                with torch.no_grad():
+                    model.eval()
+                    features_unlabeled = model(x_unlabeled)
+                    if features_unlabeled.dim() > 2:
+                        features_unlabeled = features_unlabeled.flatten(1)
 
-        if x_labeled is not None and features_labeled is None:
-            with torch.no_grad():
-                model.eval()
-                features_labeled = model(x_labeled)
-                if features_labeled.dim() > 2:
-                    features_labeled = features_labeled.flatten(1)
+            if x_labeled is not None and features_labeled is None:
+                with torch.no_grad():
+                    model.eval()
+                    features_labeled = model(x_labeled)
+                    if features_labeled.dim() > 2:
+                        features_labeled = features_labeled.flatten(1)
+        finally:
+            model.train(was_training)
 
         # Greedy k-center
         if features_labeled is not None:
@@ -292,6 +300,7 @@ class BadgeSampling:
 
         last_linear = self._find_last_linear(model)
         if last_linear is None:
+            model.train(was_training)
             raise ValueError(
                 "BadgeSampling requires a model with at least one nn.Linear layer"
             )
@@ -426,12 +435,17 @@ class QueryByCommittee:
         if x_unlabeled is None:
             raise ValueError("x_unlabeled is required")
         # Collect predictions from all committee members
+        training_states = [m.training for m in self.models]
         predictions = []
-        for member in self.models:
-            member.eval()
-            logits = member(x_unlabeled)
-            probs = F.softmax(logits, dim=-1)
-            predictions.append(probs)
+        try:
+            for member in self.models:
+                member.eval()
+                logits = member(x_unlabeled)
+                probs = F.softmax(logits, dim=-1)
+                predictions.append(probs)
+        finally:
+            for member, was_training in zip(self.models, training_states):
+                member.train(was_training)
 
         predictions = torch.stack(predictions)  # (num_models, batch_size, num_classes)
 

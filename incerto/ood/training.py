@@ -100,8 +100,8 @@ class OutlierExposureLoss(nn.Module):
 
     Loss = L_CE(f(x_in), y) + λ * L_OE(f(x_out))
 
-    where L_OE encourages uniform predictions:
-        L_OE = -log(1/K) * sum_i p_i = KL(uniform || p)
+    where L_OE is the cross-entropy with a uniform distribution:
+        L_OE = -(1/K) * sum_k log p_k = H(uniform, p)
 
     Reference:
         Hendrycks et al. "Deep Anomaly Detection with Outlier Exposure"
@@ -142,17 +142,10 @@ class OutlierExposureLoss(nn.Module):
         if logits_out is None:
             return loss_ce
 
-        # Outlier exposure: encourage uniform predictions
-        num_classes = logits_out.size(-1)
+        # Outlier exposure: cross-entropy with uniform distribution
+        # H(uniform, p) = -(1/K) * sum_k log p_k  (Hendrycks et al., 2019)
         log_probs_out = F.log_softmax(logits_out, dim=-1)
-        uniform = torch.ones_like(log_probs_out) / num_classes
-
-        # KL divergence from uniform: KL(uniform || p_out)
-        loss_oe = F.kl_div(
-            log_probs_out,
-            uniform,
-            reduction="batchmean",
-        )
+        loss_oe = -log_probs_out.mean(dim=-1).mean()
 
         total_loss = loss_ce + self.lambda_oe * loss_oe
 
@@ -208,12 +201,14 @@ class EnergyRegularizedLoss(nn.Module):
         if logits_out is None:
             return loss_ce
 
-        # Energy scores
+        # Energy scores (lower = more in-distribution)
         energy_in = -torch.logsumexp(logits_in, dim=-1)
         energy_out = -torch.logsumexp(logits_out, dim=-1)
 
-        # Hinge loss: encourage energy_in < energy_out - margin
-        loss_energy = F.relu(energy_in - energy_out + self.margin).mean()
+        # Hinge on means: penalise when mean ID energy is not below
+        # mean OOD energy by at least `margin`.  Reducing each term
+        # independently avoids shape mismatch when N_in != N_out.
+        loss_energy = F.relu(energy_in.mean() - energy_out.mean() + self.margin)
 
         total_loss = loss_ce + self.lambda_energy * loss_energy
 

@@ -282,6 +282,6 @@ class VarianceOfTokenProbs:
             diff = diff * mask
             variance = diff.sum(dim=1) / seq_lengths
         else:
-            variance = max_probs.var(dim=1)
+            variance = max_probs.var(dim=1, correction=0)
 
         return variance
