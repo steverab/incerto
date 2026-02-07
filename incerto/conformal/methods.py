@@ -10,14 +10,27 @@ optimisers, schedulers, or training loops are defined here.
 
 from __future__ import annotations
 from typing import Callable, Tuple, List, Union
+import math
 import torch
-import numpy as np
 
 
 def _validate_alpha(alpha: float) -> None:
     """Validate that alpha is in (0, 1)."""
     if not (0.0 < alpha < 1.0):
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+
+
+def _conformal_quantile(scores: torch.Tensor, alpha: float) -> torch.Tensor:
+    """Compute the conformal quantile with exact finite-sample correction.
+
+    Returns the ⌈(1 − α)(n + 1)⌉-th smallest score, which guarantees
+    1 − α coverage under exchangeability.
+    """
+    n = len(scores)
+    sorted_scores = torch.sort(scores)[0]
+    k = math.ceil((1 - alpha) * (n + 1))  # 1-indexed
+    k = max(1, min(k, n))
+    return sorted_scores[k - 1]
 
 
 class ConformalPredictor:
@@ -105,8 +118,7 @@ def inductive_conformal(
     Classical Inductive Conformal Prediction (ICP)
     — Vovk, Gammerman, and Shafer, *Algorithmic Learning in a Random World* (2005).
 
-    Returns a predictor f̂(x) that outputs a prediction set (classification) or
-    interval (regression) for any new x.
+    Returns a predictor f̂(x) that outputs a prediction set for classification.
     """
     _validate_alpha(alpha)
     model.eval()
@@ -117,9 +129,7 @@ def inductive_conformal(
         # conformity score: 1 − probability assigned to the true class
         scores.append(1.0 - conf[torch.arange(len(y)), y])
     all_scores = torch.cat(scores)
-    n_calib = len(all_scores)
-    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
-    qhat = torch.quantile(all_scores, q_level)
+    qhat = _conformal_quantile(all_scores, alpha)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
         model.eval()
@@ -159,13 +169,7 @@ def mondrian_conformal(
         for p, c, yy in zip(part, conf, y):
             scores = parts.setdefault(int(p), [])
             scores.append(1.0 - c[yy])
-    qhats = {
-        k: torch.quantile(
-            torch.tensor(v),
-            min((1.0 - alpha) * (1 + 1.0 / len(v)), 1.0),
-        )
-        for k, v in parts.items()
-    }
+    qhats = {k: _conformal_quantile(torch.tensor(v), alpha) for k, v in parts.items()}
 
     # Conservative fallback for partitions unseen during calibration:
     # qhat=1.0 means threshold 1−1=0, so every class is included.
@@ -213,9 +217,7 @@ def aps(
         scores.append(cumprobs[torch.arange(len(y)), ranks])
 
     all_scores = torch.cat(scores)
-    n_calib = len(all_scores)
-    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
-    qhat = torch.quantile(all_scores, q_level)
+    qhat = _conformal_quantile(all_scores, alpha)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
         model.eval()
@@ -226,10 +228,13 @@ def aps(
             )
             cumprobs = probs.cumsum(dim=-1)
             # Include classes until cumulative probability exceeds threshold
-            return [
-                (idx_i[cumprobs_i <= qhat]).clone().detach()
-                for idx_i, cumprobs_i in zip(idx, cumprobs)
-            ]
+            sets = []
+            for idx_i, cumprobs_i in zip(idx, cumprobs):
+                s = idx_i[cumprobs_i <= qhat]
+                if len(s) == 0:
+                    s = idx_i[:1]  # always include the most probable class
+                sets.append(s)
+            return sets
 
     return predictor
 
@@ -261,9 +266,7 @@ def raps(
         g = probs.cumsum(dim=-1) + penalty
         scores.append(g[torch.arange(len(y)), rank])
     all_scores = torch.cat(scores)
-    n_calib = len(all_scores)
-    q_level = min((1.0 - alpha) * (1 + 1.0 / n_calib), 1.0)
-    qhat = torch.quantile(all_scores, q_level)
+    qhat = _conformal_quantile(all_scores, alpha)
 
     def predictor(x: torch.Tensor) -> List[torch.Tensor]:
         model.eval()
@@ -275,11 +278,8 @@ def raps(
             g = probs.cumsum(dim=-1) + penalty
             S = (g <= qhat).long()
             # enforce minimum size k_reg
-            ks = torch.clamp(k_reg - S.sum(dim=-1), min=0)
-            mask_extra = (
-                torch.arange(probs.size(-1), device=probs.device)[None] < ks[:, None]
-            )
-            S = S | mask_extra
+            mask_min = torch.arange(probs.size(-1), device=probs.device)[None] < k_reg
+            S = S | mask_min
             return [(idx_i[S_i == 1]).clone().detach() for idx_i, S_i in zip(idx, S)]
 
     return predictor
@@ -288,7 +288,6 @@ def raps(
 # -------- Regression flavours (absolute residual conformity) -------- #
 
 
-@torch.no_grad()
 def jackknife_plus(
     model_fn: Callable[[torch.utils.data.Dataset], torch.nn.Module],
     train_dataset: torch.utils.data.Dataset,
@@ -298,34 +297,70 @@ def jackknife_plus(
     Jackknife+ Intervals
     — Barber, Candès, and Ramdas, *Ann. Stat.* 2021.
 
-    model_fn: function that re-trains a model on a supplied dataset split.
+    Produces prediction intervals using leave-one-out cross-validation with
+    the Jackknife+ aggregation rule.  All n LOO models are retained and used
+    at prediction time to construct valid intervals.
+
+    Args:
+        model_fn: Function that trains a model on a provided dataset subset.
+        train_dataset: Training dataset used for LOO calibration.
+        alpha: Miscoverage rate (e.g., 0.1 for 90% coverage).
     """
     _validate_alpha(alpha)
     n = len(train_dataset)
-    preds = torch.empty((n,))  # ŷ_i^(-i)
+    loo_models: List[torch.nn.Module] = []
+    residuals = torch.empty(n)
+
     for i in range(n):
         leave_one_out = torch.utils.data.Subset(
             train_dataset, [j for j in range(n) if j != i]
         )
         model = model_fn(leave_one_out)
+        model.eval()
+        loo_models.append(model)
         xi, yi = train_dataset[i]
-        preds[i] = model(xi.unsqueeze(0)).squeeze().cpu()
-    residuals = torch.abs(preds - torch.tensor([train_dataset[i][1] for i in range(n)]))
-    q_level = min((1.0 - alpha) * (1 + 1.0 / n), 1.0)
-    q = torch.quantile(residuals, q_level)
-
-    # Train full-data model once during calibration, not on every predict call
-    full_model = model_fn(train_dataset)
+        with torch.no_grad():
+            pred = model(xi.unsqueeze(0)).squeeze().cpu()
+        residuals[i] = torch.abs(pred - yi)
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            mu = full_model(x).squeeze()
-        return mu - q, mu + q
+        loo_preds = []
+        for i in range(n):
+            loo_models[i].eval()
+            with torch.no_grad():
+                loo_preds.append(loo_models[i](x).squeeze())
+        loo_preds = torch.stack(loo_preds, dim=0)  # (n, *test_shape)
+
+        r = residuals
+        if loo_preds.dim() > 1:
+            r = residuals.unsqueeze(-1)
+
+        lower_vals = loo_preds - r
+        upper_vals = loo_preds + r
+
+        # Jackknife+ quantiles (Barber et al., 2021, Theorem 1)
+        # Lower: ⌈α(n+1)⌉-th smallest of {-∞} ∪ lower_vals
+        # Upper: ⌈(1-α)(n+1)⌉-th smallest of upper_vals ∪ {+∞}
+        lower_sorted = torch.sort(lower_vals, dim=0)[0]
+        upper_sorted = torch.sort(upper_vals, dim=0)[0]
+
+        k_lo = math.ceil(alpha * (n + 1)) - 2  # 0-indexed into actual values
+        if k_lo < 0:
+            lower = torch.full_like(lower_sorted[0], float("-inf"))
+        else:
+            lower = lower_sorted[k_lo]
+
+        k_hi = math.ceil((1 - alpha) * (n + 1)) - 1  # 0-indexed
+        if k_hi >= n:
+            upper = torch.full_like(upper_sorted[0], float("inf"))
+        else:
+            upper = upper_sorted[k_hi]
+
+        return lower, upper
 
     return predictor
 
 
-@torch.no_grad()
 def cv_plus(
     model_fn: Callable[[torch.utils.data.Dataset], torch.nn.Module],
     train_dataset: torch.utils.data.Dataset,
@@ -334,43 +369,83 @@ def cv_plus(
 ) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
     """
     Cross-Validation+ Intervals (CV+)
-    — Barber et al., *JASA* 2021.
+    — Barber et al., *Ann. Stat.* 2021.
 
-    Offers less pessimistic intervals than Jackknife+ while controlling coverage.
+    Uses k-fold cross-validation to produce prediction intervals.  All K
+    fold models are retained and used at prediction time via the CV+
+    aggregation rule.
+
+    Args:
+        model_fn: Function that trains a model on a provided dataset subset.
+        train_dataset: Training dataset used for k-fold calibration.
+        folds: Number of cross-validation folds.
+        alpha: Miscoverage rate (e.g., 0.1 for 90% coverage).
     """
     _validate_alpha(alpha)
-    # split indices
     n = len(train_dataset)
     idx = torch.randperm(n)
     fold_sizes = [(n + i) // folds for i in range(folds)]
-    all_residuals = []
+
+    fold_models: List[torch.nn.Module] = []
+    residuals = torch.empty(n)
+    sample_to_fold = torch.empty(n, dtype=torch.long)
+
     offset = 0
     for k in range(folds):
         val_idx = idx[offset : offset + fold_sizes[k]]
         offset += fold_sizes[k]
         val_set = set(val_idx.tolist())
         train_idx = [i for i in idx.tolist() if i not in val_set]
+
         model = model_fn(torch.utils.data.Subset(train_dataset, train_idx))
-        Xk = torch.stack([train_dataset[i][0] for i in val_idx])
-        yk = torch.tensor([train_dataset[i][1] for i in val_idx])
-        preds = model(Xk).squeeze()
-        # Signed residuals: Y - Ŷ
-        all_residuals.append(yk - preds)
+        model.eval()
+        fold_models.append(model)
 
-    signed_residuals = torch.cat(all_residuals)
-    n_res = len(signed_residuals)
-    q_lo = torch.quantile(signed_residuals, alpha / 2)
-    q_hi = torch.quantile(
-        signed_residuals, min((1 - alpha / 2) * (1 + 1.0 / n_res), 1.0)
-    )
+        with torch.no_grad():
+            Xk = torch.stack([train_dataset[i][0] for i in val_idx])
+            yk = torch.tensor([train_dataset[i][1] for i in val_idx])
+            preds = model(Xk).squeeze()
+            fold_residuals = torch.abs(yk - preds)
 
-    # Train full-data model once during calibration
-    full_model = model_fn(train_dataset)
+        for j, vi in enumerate(val_idx.tolist()):
+            residuals[vi] = fold_residuals[j]
+            sample_to_fold[vi] = k
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            mu = full_model(x).squeeze()
-        return mu + q_lo, mu + q_hi
+        fold_preds = []
+        for k in range(folds):
+            fold_models[k].eval()
+            with torch.no_grad():
+                fold_preds.append(fold_models[k](x).squeeze())
+        fold_preds = torch.stack(fold_preds, dim=0)  # (K, *test_shape)
+
+        # Select the fold model prediction for each calibration sample
+        selected = fold_preds[sample_to_fold]  # (n, *test_shape)
+
+        r = residuals
+        if selected.dim() > 1:
+            r = residuals.unsqueeze(-1)
+
+        lower_vals = selected - r
+        upper_vals = selected + r
+
+        # CV+ quantiles (Barber et al., 2021)
+        lower_sorted = torch.sort(lower_vals, dim=0)[0]
+        upper_sorted = torch.sort(upper_vals, dim=0)[0]
+
+        k_lo = math.ceil(alpha * (n + 1)) - 2
+        if k_lo < 0:
+            lower = torch.full_like(lower_sorted[0], float("-inf"))
+        else:
+            lower = lower_sorted[k_lo]
+
+        k_hi = math.ceil((1 - alpha) * (n + 1)) - 1
+        if k_hi >= n:
+            upper = torch.full_like(upper_sorted[0], float("inf"))
+        else:
+            upper = upper_sorted[k_hi]
+
+        return lower, upper
 
     return predictor
 
@@ -442,11 +517,7 @@ def conformalized_quantile_regression(
 
     # Compute calibrated quantile with finite-sample correction
     all_scores = torch.cat(scores)
-    n_calib = len(all_scores)
-    q_level = np.ceil((n_calib + 1) * (1 - alpha)) / n_calib
-    q_level = min(q_level, 1.0)  # ensure valid quantile
-
-    qhat = torch.quantile(all_scores, q_level)
+    qhat = _conformal_quantile(all_scores, alpha)
 
     def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         quantile_model.eval()
