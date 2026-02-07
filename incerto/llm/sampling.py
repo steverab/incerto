@@ -25,6 +25,21 @@ class SelfConsistency:
     """
 
     @staticmethod
+    def first_sentence(text: str) -> str:
+        """Extract first sentence, lowercased and stripped.
+
+        Useful as a ``normalize_fn`` for short-answer tasks where the
+        core answer appears in the first sentence but models append
+        varying continuations.
+        """
+        for sep in (".", "!", "?", "\n"):
+            idx = text.find(sep)
+            if idx != -1:
+                text = text[:idx]
+                break
+        return text.strip().lower()
+
+    @staticmethod
     def compute(
         responses: List[str],
         normalize_fn: Callable[[str], str] | None = None,
@@ -77,33 +92,46 @@ class LexicalSimilarity:
     """
 
     @staticmethod
-    def exact_match_rate(responses: List[str]) -> float:
+    def exact_match_rate(
+        responses: List[str],
+        normalize_fn: Callable[[str], str] | None = None,
+    ) -> float:
         """
         Compute fraction of responses that exactly match the most common.
 
         Args:
             responses: List of generated text responses
+            normalize_fn: Optional function to normalize responses before comparison
 
         Returns:
             Exact match rate (0-1)
         """
+        if normalize_fn is not None:
+            responses = [normalize_fn(r) for r in responses]
         counts = Counter(responses)
         top_count = counts.most_common(1)[0][1]
         return top_count / len(responses)
 
     @staticmethod
-    def pairwise_token_overlap(responses: List[str]) -> float:
+    def pairwise_token_overlap(
+        responses: List[str],
+        normalize_fn: Callable[[str], str] | None = None,
+    ) -> float:
         """
         Average pairwise token overlap (Jaccard similarity).
 
         Args:
             responses: List of generated text responses
+            normalize_fn: Optional function to normalize responses before comparison
 
         Returns:
             Average Jaccard similarity across all pairs
         """
         if len(responses) < 2:
             return 1.0
+
+        if normalize_fn is not None:
+            responses = [normalize_fn(r) for r in responses]
 
         # Tokenize
         token_sets = [set(r.split()) for r in responses]
@@ -239,6 +267,7 @@ class SemanticEntropy:
         responses: List[str],
         similarity_threshold: float = 0.85,
         embedding_model=None,
+        normalize_fn: Callable[[str], str] | None = None,
     ) -> dict:
         """
         Compute semantic entropy by clustering similar responses.
@@ -248,6 +277,7 @@ class SemanticEntropy:
             similarity_threshold: Threshold for considering responses similar
             embedding_model: Optional sentence embedding model (e.g., SentenceTransformer)
                            If None, falls back to lexical similarity
+            normalize_fn: Optional function to normalize responses before comparison
 
         Returns:
             Dictionary with:
@@ -260,6 +290,9 @@ class SemanticEntropy:
 
         if len(responses) == 1:
             return {"semantic_entropy": 0.0, "num_clusters": 1, "clusters": [0]}
+
+        if normalize_fn is not None:
+            responses = [normalize_fn(r) for r in responses]
 
         # Compute pairwise similarities
         if embedding_model is not None:
