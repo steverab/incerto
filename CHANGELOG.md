@@ -17,10 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still raises a clear ImportError, but the rest of the package imports
   cleanly. ([incerto/data/__init__.py](incerto/data/__init__.py))
 
-### Yanked
+### Notes
 
-- **0.1.0** is yanked on PyPI due to the broken base install above. Users on
-  `pip install incerto` (no extras) should upgrade to 0.1.1.
+- **0.1.0 has been deleted from PyPI** due to the broken base install above.
+  Per PyPI policy, the 0.1.0 version number remains permanently reserved and
+  cannot be reused. 0.1.1 is the first installable release; use
+  `pip install incerto` (which now resolves to 0.1.1 or later).
 
 ## [0.1.0] - 2026-05-15
 
