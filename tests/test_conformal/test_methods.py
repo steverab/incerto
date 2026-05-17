@@ -13,17 +13,17 @@ API:
 import pytest
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 from incerto.conformal import (
-    inductive_conformal,
-    mondrian_conformal,
-    aps,
-    raps,
-    jackknife_plus,
-    cv_plus,
-    conformalized_quantile_regression,
     ConformalPredictor,
+    aps,
+    conformalized_quantile_regression,
+    cv_plus,
+    inductive_conformal,
+    jackknife_plus,
+    mondrian_conformal,
+    raps,
 )
 
 
@@ -56,12 +56,8 @@ class TestInductiveConformal:
         """Test that smaller alpha (higher coverage) produces larger sets."""
         x_test = torch.randn(10, 64)
 
-        predictor_90 = inductive_conformal(
-            ood_model, ood_id_loader, alpha=0.1
-        )  # 90% coverage
-        predictor_80 = inductive_conformal(
-            ood_model, ood_id_loader, alpha=0.2
-        )  # 80% coverage
+        predictor_90 = inductive_conformal(ood_model, ood_id_loader, alpha=0.1)  # 90% coverage
+        predictor_80 = inductive_conformal(ood_model, ood_id_loader, alpha=0.2)  # 80% coverage
 
         sets_90 = predictor_90(x_test)
         sets_80 = predictor_80(x_test)
@@ -249,9 +245,7 @@ class TestConformalIntegration:
                 assert isinstance(ps, torch.Tensor)
                 assert len(ps) >= 0  # Can be empty but usually not
 
-    def test_prediction_sets_are_valid_classes(
-        self, ood_model, ood_id_loader, num_classes
-    ):
+    def test_prediction_sets_are_valid_classes(self, ood_model, ood_id_loader, num_classes):
         """Test that prediction sets contain valid class indices."""
         alpha = 0.1
         x_test = torch.randn(5, 64)
@@ -476,51 +470,138 @@ class TestCoverageGuarantee:
         model.eval()
         return model, W_true
 
+    def _make_calib_test(self, W_true, n_cal=1000, n_test=2000, n_classes=5):
+        torch.manual_seed(1)
+        X_cal = torch.randn(n_cal, 8)
+        y_cal = (X_cal @ W_true).argmax(dim=-1)
+        cal_loader = DataLoader(TensorDataset(X_cal, y_cal), batch_size=64)
+
+        torch.manual_seed(2)
+        X_test = torch.randn(n_test, 8)
+        y_test = (X_test @ W_true).argmax(dim=-1)
+        return cal_loader, X_test, y_test
+
+    @staticmethod
+    def _check_coverage(pred_sets, y_test, alpha, slack=0.03):
+        """Check empirical coverage with a 2-sigma slack for binomial noise."""
+        covered = 0
+        for i, y in enumerate(y_test):
+            s = pred_sets[i]
+            if isinstance(s, torch.Tensor):
+                if (s == y).any().item():
+                    covered += 1
+            else:
+                if y.item() in s:
+                    covered += 1
+        coverage = covered / len(y_test)
+        assert (
+            coverage >= (1 - alpha) - slack
+        ), f"Coverage {coverage:.3f} too low (target {1-alpha})"
+        return coverage
+
     def test_inductive_conformal_coverage(self):
         """ICP empirical coverage on held-out data should be >= 1-alpha."""
         model, W_true = self._make_trained_model()
         alpha = 0.1
-
-        # Calibration set
-        torch.manual_seed(1)
-        X_cal = torch.randn(300, 8)
-        y_cal = (X_cal @ W_true).argmax(dim=-1)
-        cal_loader = DataLoader(TensorDataset(X_cal, y_cal), batch_size=64)
+        cal_loader, X_test, y_test = self._make_calib_test(W_true)
 
         predictor = inductive_conformal(model, cal_loader, alpha=alpha)
-
-        # Test set
-        torch.manual_seed(2)
-        X_test = torch.randn(500, 8)
-        y_test = (X_test @ W_true).argmax(dim=-1)
         pred_sets = predictor(X_test)
-
-        covered = sum(y_test[i] in pred_sets[i] for i in range(len(y_test)))
-        coverage = covered / len(y_test)
-        # Allow small slack below 1-alpha for finite-sample fluctuation
-        assert (
-            coverage >= (1 - alpha) - 0.05
-        ), f"Coverage {coverage:.3f} too low (target {1-alpha})"
+        self._check_coverage(pred_sets, y_test, alpha)
 
     def test_aps_coverage(self):
         """APS empirical coverage on held-out data should be >= 1-alpha."""
         model, W_true = self._make_trained_model()
         alpha = 0.1
-
-        torch.manual_seed(1)
-        X_cal = torch.randn(300, 8)
-        y_cal = (X_cal @ W_true).argmax(dim=-1)
-        cal_loader = DataLoader(TensorDataset(X_cal, y_cal), batch_size=64)
+        cal_loader, X_test, y_test = self._make_calib_test(W_true)
 
         predictor = aps(model, cal_loader, alpha=alpha)
+        pred_sets = predictor(X_test)
+        self._check_coverage(pred_sets, y_test, alpha)
+
+    def test_raps_coverage(self):
+        """RAPS empirical coverage on held-out data should be >= 1-alpha."""
+        model, W_true = self._make_trained_model()
+        alpha = 0.1
+        cal_loader, X_test, y_test = self._make_calib_test(W_true)
+
+        predictor = raps(model, cal_loader, alpha=alpha, lam=0.01, k_reg=1)
+        pred_sets = predictor(X_test)
+        self._check_coverage(pred_sets, y_test, alpha)
+
+    def test_mondrian_coverage(self):
+        """Mondrian empirical coverage should be >= 1-alpha overall."""
+        model, W_true = self._make_trained_model()
+        alpha = 0.1
+        cal_loader, X_test, y_test = self._make_calib_test(W_true)
+
+        # Partition by predicted class so per-partition calibration is feasible.
+        def partition_by_pred(x, y=None):
+            with torch.no_grad():
+                return model(x).argmax(dim=-1)
+
+        predictor = mondrian_conformal(
+            model, cal_loader, alpha=alpha, partition_fn=partition_by_pred
+        )
+        pred_sets = predictor(X_test)
+        self._check_coverage(pred_sets, y_test, alpha, slack=0.05)
+
+    @staticmethod
+    def _train_linear_regressor(dataset: torch.utils.data.Dataset) -> nn.Module:
+        """Train a small regression model on the provided dataset subset."""
+        loader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        torch.manual_seed(0)
+        model = nn.Sequential(nn.Linear(4, 16), nn.ReLU(), nn.Linear(16, 1))
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+        for _ in range(20):
+            for xb, yb in loader:
+                optimizer.zero_grad()
+                pred = model(xb).squeeze(-1)
+                loss = nn.functional.mse_loss(pred, yb)
+                loss.backward()
+                optimizer.step()
+        model.eval()
+        return model
+
+    @pytest.mark.slow
+    def test_jackknife_plus_coverage(self):
+        """Jackknife+ empirical coverage for regression should meet the bound."""
+        torch.manual_seed(0)
+        n_train, n_test = 40, 400
+        X = torch.randn(n_train, 4)
+        beta = torch.randn(4)
+        y = X @ beta + 0.1 * torch.randn(n_train)
+        train_ds = TensorDataset(X, y)
+
+        alpha = 0.1
+        predictor = jackknife_plus(self._train_linear_regressor, train_ds, alpha=alpha)
 
         torch.manual_seed(2)
-        X_test = torch.randn(500, 8)
-        y_test = (X_test @ W_true).argmax(dim=-1)
-        pred_sets = predictor(X_test)
-
-        covered = sum(y_test[i] in pred_sets[i] for i in range(len(y_test)))
-        coverage = covered / len(y_test)
+        X_test = torch.randn(n_test, 4)
+        y_test = X_test @ beta + 0.1 * torch.randn(n_test)
+        lo, hi = predictor(X_test)
+        covered = ((y_test >= lo) & (y_test <= hi)).float().mean().item()
+        # Jackknife+ has 1 - 2*alpha worst-case guarantee
         assert (
-            coverage >= (1 - alpha) - 0.05
-        ), f"Coverage {coverage:.3f} too low (target {1-alpha})"
+            covered >= 1 - 2 * alpha - 0.02
+        ), f"Jackknife+ coverage {covered:.3f} below worst-case bound"
+
+    def test_cv_plus_coverage(self):
+        """CV+ empirical coverage for regression should meet the bound."""
+        torch.manual_seed(0)
+        n_train, n_test = 100, 400
+        X = torch.randn(n_train, 4)
+        beta = torch.randn(4)
+        y = X @ beta + 0.1 * torch.randn(n_train)
+        train_ds = TensorDataset(X, y)
+
+        alpha = 0.1
+        predictor = cv_plus(self._train_linear_regressor, train_ds, folds=5, alpha=alpha)
+
+        torch.manual_seed(2)
+        X_test = torch.randn(n_test, 4)
+        y_test = X_test @ beta + 0.1 * torch.randn(n_test)
+        lo, hi = predictor(X_test)
+        covered = ((y_test >= lo) & (y_test <= hi)).float().mean().item()
+        # CV+ has the same 1 - 2*alpha worst-case bound
+        assert covered >= 1 - 2 * alpha - 0.02, f"CV+ coverage {covered:.3f} below worst-case bound"

@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "incerto"
-copyright = "2025, Stephan Rabanser"
+copyright = "2026, Stephan Rabanser"
 author = "Stephan Rabanser"
 
 version = "0.1.0"
@@ -38,11 +38,15 @@ extensions = [
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
-    "special-members": "__init__",
     "undoc-members": True,
     "exclude-members": "__weakref__",
     "show-inheritance": True,
 }
+
+# Avoid autosummary double-documenting __init__ alongside its class entry
+# (napoleon_include_init_with_doc still folds the __init__ docstring into
+# the class docstring).
+suppress_warnings = ["autosectionlabel.*"]
 
 # Autosummary settings
 autosummary_generate = True
@@ -51,7 +55,7 @@ autosummary_imported_members = False
 # Napoleon settings for Google/NumPy style docstrings
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = True
+napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
 napoleon_include_special_with_doc = True
 napoleon_use_admonition_for_examples = True

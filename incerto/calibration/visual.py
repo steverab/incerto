@@ -1,11 +1,11 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 
-from .utils import get_bin_stats
 from .metrics import _find_sigma_star
+from .utils import get_bin_stats
 
 
 def plot_reliability_diagram(
@@ -172,9 +172,7 @@ def plot_smooth_reliability_diagram(
 
     # Find optimal bandwidth and compute smooth curve
     sigma_star = _find_sigma_star(confidences, accuracies)
-    grid, r_sigma, density = _smooth_calibration_curve(
-        confidences, accuracies, sigma_star
-    )
+    grid, r_sigma, density = _smooth_calibration_curve(confidences, accuracies, sigma_star)
 
     if ax is None:
         fig, ax = plt.subplots()

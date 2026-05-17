@@ -9,11 +9,11 @@ import torch.nn.functional as F
 
 from incerto.active.acquisition import EntropyAcquisition
 from incerto.active.strategies import (
-    UncertaintySampling,
-    DiversitySampling,
-    CoreSetSelection,
     BadgeSampling,
+    CoreSetSelection,
+    DiversitySampling,
     QueryByCommittee,
+    UncertaintySampling,
 )
 
 
@@ -92,9 +92,7 @@ class TestDiversitySampling:
     def test_diversity_weight_zero_matches_uncertainty(self, model, data):
         """With diversity_weight=0, should match pure uncertainty sampling."""
         torch.manual_seed(0)
-        strat_div = DiversitySampling(
-            EntropyAcquisition(), batch_size=5, diversity_weight=0.0
-        )
+        strat_div = DiversitySampling(EntropyAcquisition(), batch_size=5, diversity_weight=0.0)
         indices_div = strat_div.query(model, data)
 
         strat_unc = UncertaintySampling(EntropyAcquisition(), batch_size=5)

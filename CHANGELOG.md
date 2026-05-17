@@ -5,9 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-02-06
+## [0.1.0] - 2026-05-15
 
 Initial release of incerto, a comprehensive Python library for uncertainty quantification in machine learning.
+
+### Tested Versions
+
+This release was tested against the following dependency versions; later
+versions may work but are unverified:
+
+- Python 3.10 – 3.13
+- PyTorch ≥ 2.0
+- NumPy ≥ 1.24
+- scikit-learn ≥ 1.3
+- scipy ≥ 1.11
+- matplotlib ≥ 3.8
+- (optional, `[vision]`) torchvision ≥ 0.16
+- (optional, `[llm]`) transformers ≥ 4.36, accelerate ≥ 0.25,
+  sentence-transformers ≥ 2.2
 
 ### Added
 

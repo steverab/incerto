@@ -6,6 +6,7 @@ the score() method for their specific detection strategy.
 """
 
 from abc import ABC, abstractmethod
+
 import torch
 
 
@@ -75,7 +76,7 @@ class OODDetector(ABC):
         Higher scores indicate the input is more likely to be out-of-distribution.
 
         Args:
-            x: Input tensor of shape (batch_size, *input_dims)
+            x: Input tensor of shape ``(batch_size, ...)``
 
         Returns:
             OOD scores of shape (batch_size,) where higher values indicate
@@ -93,7 +94,7 @@ class OODDetector(ABC):
         Predict whether inputs are OOD using a threshold.
 
         Args:
-            x: Input tensor of shape (batch_size, *input_dims)
+            x: Input tensor of shape ``(batch_size, ...)``
             threshold: Score threshold for OOD classification.
                       Scores > threshold are classified as OOD.
 
@@ -120,9 +121,13 @@ class OODDetector(ABC):
         """
         return {}
 
-    def load_state_dict(self, state: dict) -> None:
+    def load_state_dict(self, state: dict) -> None:  # noqa: B027
         """
         Load detector state from a dictionary.
+
+        Default no-op; subclasses override to restore detector-specific
+        state. Not marked ``@abstractmethod`` because stateless detectors
+        (e.g. MSP, MaxLogit) need no load behaviour.
 
         Note:
             This does not load the model. The model must be set separately
@@ -134,7 +139,6 @@ class OODDetector(ABC):
         Raises:
             SerializationError: If state is invalid.
         """
-        pass
 
     def save(self, path: str) -> None:
         """
@@ -150,12 +154,10 @@ class OODDetector(ABC):
             >>> detector.fit(train_loader)
             >>> detector.save('detector_state.pt')
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("save to {path}"):
             torch.save(self.state_dict(), path)
-        except Exception as e:
-            raise SerializationError(f"Failed to save to {path}: {e}") from e
 
     @classmethod
     def load(cls, path: str, model: torch.nn.Module, **kwargs) -> "OODDetector":
@@ -173,12 +175,10 @@ class OODDetector(ABC):
         Raises:
             SerializationError: If loading fails.
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
         detector = cls(model, **kwargs)
         detector.load_state_dict(state)

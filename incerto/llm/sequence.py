@@ -6,8 +6,10 @@ a single uncertainty score for an entire generated sequence.
 """
 
 from __future__ import annotations
+
 import torch
 import torch.nn.functional as F
+
 from .token import TokenEntropy
 
 
@@ -39,9 +41,7 @@ class SequenceProbability:
         log_probs = F.log_softmax(logits, dim=dim)
 
         # Gather log probs for actual tokens
-        token_log_probs = torch.gather(
-            log_probs, dim=-1, index=token_ids.unsqueeze(-1)
-        ).squeeze(-1)
+        token_log_probs = torch.gather(log_probs, dim=-1, index=token_ids.unsqueeze(-1)).squeeze(-1)
 
         # Sum log probs = product of probs
         seq_log_prob = token_log_probs.sum(dim=1)
@@ -80,9 +80,7 @@ class AverageLogProb:
         log_probs = F.log_softmax(logits, dim=dim)
 
         # Gather log probs for actual tokens
-        token_log_probs = torch.gather(
-            log_probs, dim=-1, index=token_ids.unsqueeze(-1)
-        ).squeeze(-1)
+        token_log_probs = torch.gather(log_probs, dim=-1, index=token_ids.unsqueeze(-1)).squeeze(-1)
 
         if mask is not None:
             # Apply mask and normalize by actual length
@@ -136,9 +134,7 @@ class NormalizedSequenceProb:
         log_probs = F.log_softmax(logits, dim=dim)
 
         # Gather log probs for actual tokens
-        token_log_probs = torch.gather(
-            log_probs, dim=-1, index=token_ids.unsqueeze(-1)
-        ).squeeze(-1)
+        token_log_probs = torch.gather(log_probs, dim=-1, index=token_ids.unsqueeze(-1)).squeeze(-1)
 
         if mask is not None:
             token_log_probs = token_log_probs * mask

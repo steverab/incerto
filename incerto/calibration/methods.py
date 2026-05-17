@@ -1,7 +1,7 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 from torch.distributions import Categorical
@@ -36,13 +36,27 @@ class IdentityCalibrator(BaseCalibrator):
 
 
 class TemperatureScaling(nn.Module, BaseCalibrator):
-    """
-    Temperature scaling for calibration: scales logits by a learned temperature.
+    """Temperature scaling for post-hoc probabilistic calibration.
+
+    Learns a single positive scalar temperature ``T`` that rescales logits as
+    ``z / T`` before softmax. The temperature is fit by minimizing
+    NLL on a held-out validation set using L-BFGS. Predictions remain
+    argmax-preserving, so accuracy is unchanged.
+
+    Reference:
+        Guo et al., "On Calibration of Modern Neural Networks", ICML 2017.
+
+    Args:
+        init_temp: Initial temperature value. Must be > 0. Default: 1.0.
+
+    Example:
+        >>> calibrator = TemperatureScaling()
+        >>> calibrator.fit(val_logits, val_labels)
+        >>> calibrated = calibrator.predict(test_logits)  # Categorical distribution
     """
 
     def __init__(self, init_temp: float = 1.0):
         super().__init__()
-        # temperature parameter > 0
         self.temperature = nn.Parameter(torch.tensor(init_temp))
 
     def fit(
@@ -52,14 +66,17 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
         lr: float = 0.01,
         max_iters: int = 50,
     ):
-        """
-        Fit temperature on validation logits and labels by minimizing NLL.
+        """Fit temperature by minimizing NLL on validation logits and labels.
 
         Args:
-            logits: Tensor (n_samples, n_classes).
-            labels: Tensor (n_samples,) with class indices.
-            lr: Learning rate for L-BFGS optimizer.
-            max_iters: Maximum iterations for optimizer.
+            logits: Tensor of shape ``(n_samples, n_classes)``.
+            labels: Tensor of shape ``(n_samples,)`` with integer class indices
+                in ``[0, n_classes)``.
+            lr: Learning rate for the L-BFGS optimizer.
+            max_iters: Maximum iterations for the optimizer.
+
+        Returns:
+            self
         """
         _validate_fit_inputs(logits, labels)
         # Move to same device
@@ -81,10 +98,26 @@ class TemperatureScaling(nn.Module, BaseCalibrator):
         return self
 
     def forward(self, logits: torch.Tensor) -> torch.Tensor:
-        # used for direct scaling
+        """Apply temperature scaling to logits.
+
+        Args:
+            logits: Tensor of shape ``(n_samples, n_classes)``.
+
+        Returns:
+            Scaled logits of the same shape.
+        """
         return logits / self.temperature.clamp(min=1e-4)
 
     def predict(self, logits: torch.Tensor) -> Categorical:
+        """Return a calibrated categorical distribution over classes.
+
+        Args:
+            logits: Tensor of shape ``(n_samples, n_classes)``.
+
+        Returns:
+            A :class:`torch.distributions.Categorical` whose ``probs`` attribute
+            holds the calibrated probabilities of shape ``(n_samples, n_classes)``.
+        """
         scaled = self.forward(logits)
         probs = F.softmax(scaled, dim=1)
         return Categorical(probs=probs)
@@ -149,14 +182,12 @@ class IsotonicRegressionCalibrator(BaseCalibrator):
     def load_state_dict(self, state: dict) -> None:
         """Load isotonic regression calibrators."""
         from .._sklearn_io import deserialize_isotonic
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.n_classes = state["n_classes"]
             self.out_of_bounds = state["out_of_bounds"]
             self.calibrators = [deserialize_isotonic(d) for d in state["calibrators"]]
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         return f"IsotonicRegressionCalibrator(n_classes={self.n_classes}, out_of_bounds='{self.out_of_bounds}')"
@@ -231,20 +262,16 @@ class HistogramBinningCalibrator(BaseCalibrator):
 
     def load_state_dict(self, state: dict) -> None:
         """Load histogram binning state."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.n_bins = state["n_bins"]
             self.bin_edges = [np.array(e) for e in state["bin_edges"]]
             self.bin_true_rates = [np.array(r) for r in state["bin_true_rates"]]
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         n_classes = len(self.bin_edges) if self.bin_edges else 0
-        return (
-            f"HistogramBinningCalibrator(n_bins={self.n_bins}, n_classes={n_classes})"
-        )
+        return f"HistogramBinningCalibrator(n_bins={self.n_bins}, n_classes={n_classes})"
 
 
 class PlattScalingCalibrator(BaseCalibrator):
@@ -274,9 +301,7 @@ class PlattScalingCalibrator(BaseCalibrator):
         from ..exceptions import NotFittedError
 
         if not self.models:
-            raise NotFittedError(
-                "PlattScalingCalibrator has not been fitted. Call fit() first."
-            )
+            raise NotFittedError("PlattScalingCalibrator has not been fitted. Call fit() first.")
         probs = F.softmax(logits, dim=1).cpu().detach().numpy()
         calibrated = np.zeros_like(probs)
 
@@ -299,13 +324,11 @@ class PlattScalingCalibrator(BaseCalibrator):
     def load_state_dict(self, state: dict) -> None:
         """Load Platt scaling models."""
         from .._sklearn_io import deserialize_logistic
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.n_classes = state["n_classes"]
             self.models = [deserialize_logistic(d) for d in state["models"]]
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         return f"PlattScalingCalibrator(n_classes={self.n_classes})"
@@ -368,16 +391,14 @@ class VectorScaling(nn.Module, BaseCalibrator):
     @classmethod
     def load(cls, path: str) -> "VectorScaling":
         """Load VectorScaling from a file."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
             n_classes = state["temperature"].shape[0]
             instance = cls(n_classes=n_classes)
             instance.load_state_dict(state)
             return instance
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         temps = self.temperature.detach().cpu().numpy()
@@ -418,9 +439,7 @@ class MatrixScaling(nn.Module, BaseCalibrator):
         self.to(device)
         labels = labels.to(device)
 
-        optimizer = torch.optim.LBFGS(
-            [self.weight, self.bias], lr=lr, max_iter=max_iters
-        )
+        optimizer = torch.optim.LBFGS([self.weight, self.bias], lr=lr, max_iter=max_iters)
         nll = nn.CrossEntropyLoss()
 
         def _eval():
@@ -444,16 +463,14 @@ class MatrixScaling(nn.Module, BaseCalibrator):
     @classmethod
     def load(cls, path: str) -> "MatrixScaling":
         """Load MatrixScaling from a file."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
             n_classes = state["weight"].shape[0]
             instance = cls(n_classes=n_classes)
             instance.load_state_dict(state)
             return instance
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         n_classes = self.weight.shape[0]
@@ -507,9 +524,7 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
         self.to(device)
         labels = labels.to(device)
 
-        optimizer = torch.optim.LBFGS(
-            [self.weight, self.bias], lr=lr, max_iter=max_iters
-        )
+        optimizer = torch.optim.LBFGS([self.weight, self.bias], lr=lr, max_iter=max_iters)
 
         def _eval():
             optimizer.zero_grad()
@@ -523,8 +538,7 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
             # Add regularization if specified
             if self.mu is not None:
                 reg = self.mu * (
-                    torch.norm(self.weight - torch.eye(self.n_classes, device=device))
-                    ** 2
+                    torch.norm(self.weight - torch.eye(self.n_classes, device=device)) ** 2
                     + torch.norm(self.bias) ** 2
                 )
                 loss = loss + reg
@@ -560,17 +574,15 @@ class DirichletCalibrator(nn.Module, BaseCalibrator):
     @classmethod
     def load(cls, path: str) -> "DirichletCalibrator":
         """Load DirichletCalibrator from a file."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
             n_classes = state["weight"].shape[0]
             mu = state.get("_mu")
             instance = cls(n_classes=n_classes, mu=mu)
             instance.load_state_dict(state)
             return instance
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         mu_str = f"{self.mu:.4f}" if self.mu is not None else "None"
@@ -664,9 +676,7 @@ class BetaCalibrator(BaseCalibrator):
         from ..exceptions import NotFittedError
 
         if self.is_binary is None:
-            raise NotFittedError(
-                "BetaCalibrator has not been fitted. Call fit() first."
-            )
+            raise NotFittedError("BetaCalibrator has not been fitted. Call fit() first.")
 
         # Check if multiclass fallback
         if not self.is_binary:
@@ -681,9 +691,7 @@ class BetaCalibrator(BaseCalibrator):
         probs_np = probs.cpu().detach().numpy().astype(np.float64)
         calibrated_np = self._calibrate_probs(probs_np)
 
-        calibrated_probs = torch.tensor(
-            calibrated_np, device=logits.device, dtype=torch.float32
-        )
+        calibrated_probs = torch.tensor(calibrated_np, device=logits.device, dtype=torch.float32)
         probs_both = torch.stack([1 - calibrated_probs, calibrated_probs], dim=1)
 
         return Categorical(probs=probs_both)
@@ -707,9 +715,9 @@ class BetaCalibrator(BaseCalibrator):
 
     def load_state_dict(self, state: dict) -> None:
         """Load Beta calibrator state."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.a = state["a"]
             self.b = state["b"]
             self.c = state["c"]
@@ -721,8 +729,6 @@ class BetaCalibrator(BaseCalibrator):
                 self._multiclass_calibrator.load_state_dict(mc_state)
             else:
                 self._multiclass_calibrator = None
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         if self.a is not None:

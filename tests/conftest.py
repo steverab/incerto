@@ -6,10 +6,10 @@ This module provides common test data and utilities used across all test modules
 
 import random
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
 
 @pytest.fixture
@@ -321,9 +321,7 @@ def check_tensor():
         if dtype is not None:
             assert tensor.dtype == dtype, f"Expected dtype {dtype}, got {tensor.dtype}"
         if device is not None:
-            assert (
-                tensor.device == device
-            ), f"Expected device {device}, got {tensor.device}"
+            assert tensor.device == device, f"Expected device {device}, got {tensor.device}"
 
     return _check
 

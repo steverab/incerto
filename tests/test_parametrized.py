@@ -11,17 +11,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from incerto.calibration import (
+    DirichletCalibrator,
+    HistogramBinningCalibrator,
     IdentityCalibrator,
+    IsotonicRegressionCalibrator,
+    MatrixScaling,
+    PlattScalingCalibrator,
     TemperatureScaling,
     VectorScaling,
-    MatrixScaling,
-    IsotonicRegressionCalibrator,
-    HistogramBinningCalibrator,
-    PlattScalingCalibrator,
-    DirichletCalibrator,
 )
-from incerto.ood import MSP, Energy, MaxLogit, ODIN
-
+from incerto.ood import MSP, ODIN, Energy, MaxLogit
 
 # ---------------------------------------------------------------------------
 # Calibrator parametrized tests
@@ -38,9 +37,7 @@ def _make_calibrators(num_classes):
         pytest.param(IsotonicRegressionCalibrator(), id="Isotonic"),
         pytest.param(HistogramBinningCalibrator(n_bins=10), id="Histogram"),
         pytest.param(PlattScalingCalibrator(), id="Platt"),
-        pytest.param(
-            DirichletCalibrator(n_classes=num_classes, mu=0.01), id="Dirichlet"
-        ),
+        pytest.param(DirichletCalibrator(n_classes=num_classes, mu=0.01), id="Dirichlet"),
     ]
 
 
@@ -61,35 +58,25 @@ class TestAllCalibratorsParametrized:
 
     def test_predict_shape(self, calibrator, calibration_split):
         """All calibrators should preserve shape."""
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         assert probs.shape == calibration_split["val_logits"].shape
 
     def test_predict_returns_categorical(self, calibrator, calibration_split):
         """All calibrators should return Categorical distribution."""
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         dist = calibrator.predict(calibration_split["val_logits"])
         assert isinstance(dist, torch.distributions.Categorical)
 
-    def test_valid_probabilities(
-        self, calibrator, calibration_split, check_probability
-    ):
+    def test_valid_probabilities(self, calibrator, calibration_split, check_probability):
         """All calibrators should return valid probability distributions."""
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
 
     def test_finite_output(self, calibrator, calibration_split):
         """All calibrators should produce finite values."""
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         assert torch.isfinite(probs).all()
 

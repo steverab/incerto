@@ -5,10 +5,10 @@ Tests for LLM token-level uncertainty methods.
 import torch
 
 from incerto.llm import (
-    TokenEntropy,
-    TokenConfidence,
-    TokenPerplexity,
     SurprisalScore,
+    TokenConfidence,
+    TokenEntropy,
+    TokenPerplexity,
     TopKConfidence,
 )
 

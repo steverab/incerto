@@ -11,15 +11,15 @@ import pytest
 import torch
 
 from incerto.calibration import (
+    BetaCalibrator,
+    DirichletCalibrator,
+    HistogramBinningCalibrator,
     IdentityCalibrator,
+    IsotonicRegressionCalibrator,
+    MatrixScaling,
+    PlattScalingCalibrator,
     TemperatureScaling,
     VectorScaling,
-    MatrixScaling,
-    IsotonicRegressionCalibrator,
-    HistogramBinningCalibrator,
-    PlattScalingCalibrator,
-    DirichletCalibrator,
-    BetaCalibrator,
 )
 from incerto.exceptions import NotFittedError
 
@@ -83,18 +83,14 @@ class TestTemperatureScaling:
     def test_fit_learns_temperature(self, calibration_split):
         """Test fit learns a temperature."""
         calibrator = TemperatureScaling()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         # Temperature should be positive and may have changed
         assert calibrator.temperature.item() > 0
 
     def test_predict_shape(self, calibration_split):
         """Test predict preserves shape."""
         calibrator = TemperatureScaling()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         logits = calibration_split["val_logits"]
         probs = calibrator.predict(logits).probs
@@ -104,9 +100,7 @@ class TestTemperatureScaling:
     def test_valid_probabilities(self, calibration_split, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = TemperatureScaling()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -114,9 +108,7 @@ class TestTemperatureScaling:
     def test_predictions_unchanged(self, calibration_split):
         """Test temperature scaling doesn't change predictions (rank order)."""
         calibrator = TemperatureScaling()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         logits = calibration_split["val_logits"]
         preds_before = torch.argmax(logits, dim=1)
@@ -136,9 +128,7 @@ class TestVectorScaling:
     def test_fit_learns_per_class_temps(self, calibration_split, num_classes):
         """Test fit learns per-class temperatures."""
         calibrator = VectorScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         # Should have one temperature per class
         assert calibrator.temperature.shape == (num_classes,)
         assert (calibrator.temperature > 0).all()
@@ -146,22 +136,16 @@ class TestVectorScaling:
     def test_predict_shape(self, calibration_split, num_classes):
         """Test predict preserves shape."""
         calibrator = VectorScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 
         assert probs.shape == calibration_split["val_logits"].shape
 
-    def test_valid_probabilities(
-        self, calibration_split, num_classes, check_probability
-    ):
+    def test_valid_probabilities(self, calibration_split, num_classes, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = VectorScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -182,9 +166,7 @@ class TestMatrixScaling:
     def test_fit_learns_transformation(self, calibration_split, num_classes):
         """Test fit learns affine transformation."""
         calibrator = MatrixScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         # Should have learned weight matrix and bias
         assert calibrator.weight.shape == (num_classes, num_classes)
         assert calibrator.bias.shape == (num_classes,)
@@ -192,22 +174,16 @@ class TestMatrixScaling:
     def test_predict_shape(self, calibration_split, num_classes):
         """Test predict preserves shape."""
         calibrator = MatrixScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 
         assert probs.shape == calibration_split["val_logits"].shape
 
-    def test_valid_probabilities(
-        self, calibration_split, num_classes, check_probability
-    ):
+    def test_valid_probabilities(self, calibration_split, num_classes, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = MatrixScaling(n_classes=num_classes)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -236,9 +212,7 @@ class TestIsotonicRegressionCalibrator:
     def test_predict_shape(self, calibration_split):
         """Test predict preserves shape."""
         calibrator = IsotonicRegressionCalibrator()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 
@@ -247,9 +221,7 @@ class TestIsotonicRegressionCalibrator:
     def test_valid_probabilities(self, calibration_split, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = IsotonicRegressionCalibrator()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -266,9 +238,7 @@ class TestHistogramBinningCalibrator:
     def test_fit(self, calibration_split):
         """Test fit method."""
         calibrator = HistogramBinningCalibrator(n_bins=10)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
         # Should have bin information
         assert len(calibrator.bin_edges) > 0
         assert len(calibrator.bin_true_rates) > 0
@@ -276,9 +246,7 @@ class TestHistogramBinningCalibrator:
     def test_predict_shape(self, calibration_split):
         """Test predict preserves shape."""
         calibrator = HistogramBinningCalibrator(n_bins=10)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 
@@ -287,9 +255,7 @@ class TestHistogramBinningCalibrator:
     def test_valid_probabilities(self, calibration_split, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = HistogramBinningCalibrator(n_bins=10)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -298,9 +264,7 @@ class TestHistogramBinningCalibrator:
         """Test different number of bins."""
         for n_bins in [5, 10, 15, 20]:
             calibrator = HistogramBinningCalibrator(n_bins=n_bins)
-            calibrator.fit(
-                calibration_split["train_logits"], calibration_split["train_labels"]
-            )
+            calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
             probs = calibrator.predict(calibration_split["val_logits"]).probs
             assert probs.shape == calibration_split["val_logits"].shape
 
@@ -325,9 +289,7 @@ class TestPlattScalingCalibrator:
     def test_predict_shape(self, calibration_split):
         """Test predict preserves shape."""
         calibrator = PlattScalingCalibrator()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 
@@ -336,9 +298,7 @@ class TestPlattScalingCalibrator:
     def test_valid_probabilities(self, calibration_split, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = PlattScalingCalibrator()
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
         check_probability(probs, dim=1)
@@ -362,9 +322,7 @@ class TestCalibratorComparison:
 
         for name, calibrator in calibrators:
             # Fit
-            calibrator.fit(
-                calibration_split["train_logits"], calibration_split["train_labels"]
-            )
+            calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
             # Predict
             dist = calibrator.predict(calibration_split["val_logits"])
             assert isinstance(
@@ -372,9 +330,7 @@ class TestCalibratorComparison:
             ), f"{name} didn't return Categorical"
             assert dist.probs.shape == calibration_split["val_logits"].shape
 
-    def test_uniform_scaling_preserves_predictions(
-        self, calibration_split, num_classes
-    ):
+    def test_uniform_scaling_preserves_predictions(self, calibration_split, num_classes):
         """Test uniform scaling calibrators preserve predictions."""
         # Only TemperatureScaling and Identity preserve predictions
         # VectorScaling and MatrixScaling CAN change predictions because
@@ -387,12 +343,10 @@ class TestCalibratorComparison:
         preds_original = torch.argmax(calibration_split["val_logits"], dim=1)
 
         for calibrator in calibrators:
-            calibrator.fit(
-                calibration_split["train_logits"], calibration_split["train_labels"]
+            calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
+            preds_calibrated = calibrator.predict(calibration_split["val_logits"]).probs.argmax(
+                dim=1
             )
-            preds_calibrated = calibrator.predict(
-                calibration_split["val_logits"]
-            ).probs.argmax(dim=1)
             assert torch.equal(
                 preds_original, preds_calibrated
             ), f"{calibrator.__class__.__name__} changed predictions"
@@ -412,9 +366,7 @@ class TestCalibratorComparison:
         ]
 
         for calibrator in calibrators:
-            calibrator.fit(
-                calibration_split["train_logits"], calibration_split["train_labels"]
-            )
+            calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
             probs = calibrator.predict(calibration_split["val_logits"]).probs
             check_probability(probs, dim=1)
 
@@ -521,9 +473,7 @@ class TestDirichletCalibrator:
 
         assert probs.shape == calibration_split["val_logits"].shape
 
-    def test_valid_probabilities(
-        self, calibration_split, num_classes, check_probability
-    ):
+    def test_valid_probabilities(self, calibration_split, num_classes, check_probability):
         """Test predict returns valid probabilities."""
         calibrator = DirichletCalibrator(n_classes=num_classes)
         calibrator.fit(
@@ -612,9 +562,7 @@ class TestBetaCalibrator:
         calibrator = BetaCalibrator()
 
         # Fit on multiclass data (should use isotonic regression internally)
-        calibrator.fit(
-            calibration_split["train_logits"], calibration_split["train_labels"]
-        )
+        calibrator.fit(calibration_split["train_logits"], calibration_split["train_labels"])
 
         probs = calibrator.predict(calibration_split["val_logits"]).probs
 

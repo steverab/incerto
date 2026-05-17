@@ -57,9 +57,7 @@ class BasicBlock(nn.Module):
 
     def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
         super().__init__()
-        self.conv1 = nn.Conv2d(
-            in_channels, out_channels, 3, stride=stride, padding=1, bias=False
-        )
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -104,9 +102,7 @@ class ResNet18(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512, num_classes)
 
-    def _make_layer(
-        self, in_channels: int, out_channels: int, num_blocks: int, stride: int
-    ):
+    def _make_layer(self, in_channels: int, out_channels: int, num_blocks: int, stride: int):
         layers = []
         # First block may have stride > 1
         layers.append(BasicBlock(in_channels, out_channels, stride))

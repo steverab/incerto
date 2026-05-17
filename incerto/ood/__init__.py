@@ -12,41 +12,41 @@ from .base import OODDetector
 
 # Post-hoc OOD detection methods
 from .methods import (
+    KNN,
     MSP,
-    Energy,
     ODIN,
+    Energy,
     Mahalanobis,
     MaxLogit,
-    KNN,
-)
-
-# Training-time OOD methods
-from .training import (
-    mixup_data,
-    mixup_criterion,
-    OutlierExposureLoss,
-    EnergyRegularizedLoss,
-    CutMix,
 )
 
 # Metrics
 from .metrics import (
     auroc,
-    fpr_at_tpr,
     detection_accuracy,
+    fpr_at_tpr,
+)
+
+# Training-time OOD methods
+from .training import (
+    CutMix,
+    EnergyRegularizedLoss,
+    OutlierExposureLoss,
+    mixup_criterion,
+    mixup_data,
+)
+
+# Utilities
+from .utils import (
+    compute_threshold_at_tpr,
+    extract_features,
+    get_ood_predictions,
 )
 
 # Visualization
 from .visual import (
     plot_roc,
     score_hist,
-)
-
-# Utilities
-from .utils import (
-    compute_threshold_at_tpr,
-    get_ood_predictions,
-    extract_features,
 )
 
 __all__ = [

@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 from scipy.ndimage import gaussian_filter1d
 
 from .utils import get_bin_stats
@@ -50,9 +50,7 @@ def mce_score(logits: torch.Tensor, labels: torch.Tensor, n_bins: int = 10) -> f
     return float(np.max(np.abs(bin_acc - bin_conf)))
 
 
-def classwise_ece(
-    logits: torch.Tensor, labels: torch.Tensor, n_bins: int = 10
-) -> float:
+def classwise_ece(logits: torch.Tensor, labels: torch.Tensor, n_bins: int = 10) -> float:
     """
     Class-wise ECE: average ECE computed separately for each class.
     """

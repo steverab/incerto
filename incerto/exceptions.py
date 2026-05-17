@@ -5,6 +5,8 @@ This module defines library-specific exceptions for better error handling
 and more informative error messages.
 """
 
+from contextlib import contextmanager
+
 
 class IncertoError(Exception):
     """
@@ -94,6 +96,26 @@ class DataError(IncertoError):
     pass
 
 
+@contextmanager
+def serialization_errors(operation: str):
+    """Re-raise low-level errors during save/load as :class:`SerializationError`.
+
+    Used by ``save``/``load``/``state_dict``/``load_state_dict`` implementations
+    so users see a single exception type for any serialization failure.
+
+    Args:
+        operation: Short description of what was being done (e.g.
+            ``"load state"``, ``"save to /path/to/file"``). Embedded in the
+            error message.
+    """
+    try:
+        yield
+    except SerializationError:
+        raise
+    except Exception as e:
+        raise SerializationError(f"Failed to {operation}: {e}") from e
+
+
 __all__ = [
     "IncertoError",
     "NotFittedError",
@@ -101,4 +123,5 @@ __all__ = [
     "SerializationError",
     "ConfigurationError",
     "DataError",
+    "serialization_errors",
 ]

@@ -6,7 +6,6 @@ Provides a centralized logging configuration for the library.
 
 import logging
 import sys
-from typing import Optional
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -29,8 +28,8 @@ def get_logger(name: str) -> logging.Logger:
 
 def setup_logging(
     level: int = logging.INFO,
-    format_str: Optional[str] = None,
-    handlers: Optional[list] = None,
+    format_str: str | None = None,
+    handlers: list | None = None,
 ) -> None:
     """
     Configure logging for incerto.

@@ -2,8 +2,8 @@
 Utility functions for OOD detection methods.
 """
 
-import torch
 import numpy as np
+import torch
 
 
 def compute_threshold_at_tpr(
@@ -31,9 +31,7 @@ def compute_threshold_at_tpr(
     return float(threshold)
 
 
-def get_ood_predictions(
-    scores: torch.Tensor | np.ndarray, threshold: float
-) -> np.ndarray:
+def get_ood_predictions(scores: torch.Tensor | np.ndarray, threshold: float) -> np.ndarray:
     """
     Get binary OOD predictions based on threshold.
 
@@ -93,7 +91,7 @@ def extract_features(
     try:
         with torch.no_grad():
             for batch in data_loader:
-                if isinstance(batch, (list, tuple)):
+                if isinstance(batch, list | tuple):
                     x = batch[0]
                 else:
                     x = batch

@@ -7,25 +7,25 @@ from .base import BaseSelectivePredictor
 
 # Selective prediction methods
 from .methods import (
-    SoftmaxThreshold,
     DeepGambler,
     SelectiveNet,
     SelfAdaptiveTraining,
+    SoftmaxThreshold,
     make,
 )
 
 # Metrics
 from .metrics import (
+    accuracy_coverage_curve,
+    aurc,
     coverage,
     risk,
-    aurc,
-    accuracy_coverage_curve,
 )
 
 # Visualization
 from .visual import (
-    plot_risk_coverage,
     plot_accuracy_coverage,
+    plot_risk_coverage,
 )
 
 __all__ = [

@@ -12,14 +12,17 @@ import pytest
 import torch
 import torch.nn as nn
 
-from incerto.sp import SoftmaxThreshold, DeepGambler, SelectiveNet, SelfAdaptiveTraining
 from incerto.sp import (
-    make,
-    coverage,
-    risk,
-    aurc,
+    DeepGambler,
+    SelectiveNet,
+    SelfAdaptiveTraining,
+    SoftmaxThreshold,
     accuracy_coverage_curve,
+    aurc,
+    coverage,
+    make,
     plot_risk_coverage,
+    risk,
 )
 from incerto.sp.methods import _infer_output_dim
 
@@ -246,13 +249,9 @@ class TestSelectiveNet:
         """Test that lam controls penalty strength (separate from alpha)."""
         backbone = nn.Linear(10, 32)
         torch.manual_seed(0)
-        snet_low = SelectiveNet(
-            backbone, num_classes=5, num_features=32, alpha=0.99, lam=0.0
-        )
+        snet_low = SelectiveNet(backbone, num_classes=5, num_features=32, alpha=0.99, lam=0.0)
         torch.manual_seed(0)
-        snet_high = SelectiveNet(
-            backbone, num_classes=5, num_features=32, alpha=0.99, lam=100.0
-        )
+        snet_high = SelectiveNet(backbone, num_classes=5, num_features=32, alpha=0.99, lam=100.0)
         x = torch.randn(16, 10)
         y = torch.randint(0, 5, (16,))
 
@@ -287,9 +286,7 @@ class TestSelfAdaptiveTraining:
         assert logits.shape == (16, num_classes)
         assert torch.isfinite(logits).all()
 
-    def test_sat_loss(
-        self, simple_model, multiclass_logits, multiclass_labels, num_classes
-    ):
+    def test_sat_loss(self, simple_model, multiclass_logits, multiclass_labels, num_classes):
         """Test SAT loss computation."""
         sat = SelfAdaptiveTraining(simple_model, num_classes)
 
@@ -330,9 +327,7 @@ class TestSelfAdaptiveTraining:
 
         assert torch.allclose(loss_sat, loss_ce, atol=1e-5)
 
-    def test_gradient_flow(
-        self, simple_model, multiclass_logits, multiclass_labels, num_classes
-    ):
+    def test_gradient_flow(self, simple_model, multiclass_logits, multiclass_labels, num_classes):
         """Test gradients flow through SAT loss."""
         sat = SelfAdaptiveTraining(simple_model, num_classes)
         logits = multiclass_logits.clone().requires_grad_(True)

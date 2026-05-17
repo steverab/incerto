@@ -6,21 +6,20 @@ Common plotting functions to avoid duplication across examples.
 
 import logging
 
-import torch
-import numpy as np
 import matplotlib.pyplot as plt
-from typing import Optional, List
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
 
 def plot_training_curves(
-    train_losses: List[float],
-    val_losses: Optional[List[float]] = None,
-    train_accs: Optional[List[float]] = None,
-    val_accs: Optional[List[float]] = None,
+    train_losses: list[float],
+    val_losses: list[float] | None = None,
+    train_accs: list[float] | None = None,
+    val_accs: list[float] | None = None,
     title: str = "Training Curves",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     show: bool = True,
 ):
     """
@@ -76,7 +75,7 @@ def plot_uncertainty_distribution(
     correct_mask: torch.Tensor,
     title: str = "Uncertainty Distribution",
     xlabel: str = "Uncertainty",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     show: bool = True,
 ):
     """
@@ -132,10 +131,10 @@ def plot_uncertainty_distribution(
 def plot_2d_classification(
     X: np.ndarray,
     y: np.ndarray,
-    model: Optional[torch.nn.Module] = None,
+    model: torch.nn.Module | None = None,
     device: str = "cpu",
     title: str = "Classification",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     show: bool = True,
 ):
     """

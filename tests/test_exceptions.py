@@ -3,13 +3,14 @@ Tests for custom exception classes.
 """
 
 import pytest
+
 from incerto.exceptions import (
-    IncertoError,
-    NotFittedError,
     CalibrationError,
-    SerializationError,
     ConfigurationError,
     DataError,
+    IncertoError,
+    NotFittedError,
+    SerializationError,
 )
 
 

@@ -35,9 +35,7 @@ def deserialize_isotonic(d: dict):
     ir.increasing_ = d["increasing_"]
 
     if len(ir.X_thresholds_) == 1:
-        ir.f_ = lambda x, val=float(ir.y_thresholds_[0]): np.full_like(
-            x, val, dtype=np.float64
-        )
+        ir.f_ = lambda x, val=float(ir.y_thresholds_[0]): np.full_like(x, val, dtype=np.float64)
     else:
         ir.f_ = interp1d(
             ir.X_thresholds_,

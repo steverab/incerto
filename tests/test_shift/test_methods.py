@@ -6,13 +6,13 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from incerto.shift import (
-    MMDShiftDetector,
-    EnergyShiftDetector,
-    KSShiftDetector,
-    ClassifierShiftDetector,
     BBSDDetector,
-    LabelShiftDetector,
+    ClassifierShiftDetector,
+    EnergyShiftDetector,
     ImportanceWeightingShift,
+    KSShiftDetector,
+    LabelShiftDetector,
+    MMDShiftDetector,
 )
 
 
@@ -329,9 +329,7 @@ class TestLabelShiftDetector:
         assert detector.confusion_matrix.shape == (3, 3)
 
         # Label distribution should sum to 1
-        assert torch.allclose(
-            detector.source_label_dist.sum(), torch.tensor(1.0), atol=1e-6
-        )
+        assert torch.allclose(detector.source_label_dist.sum(), torch.tensor(1.0), atol=1e-6)
 
     def test_estimate_target_distribution(self, reference_data, simple_model):
         detector = LabelShiftDetector(num_classes=3)
@@ -353,9 +351,7 @@ class TestLabelShiftDetector:
         target_loader = DataLoader(reference_data, batch_size=32)
 
         detector.fit(simple_model, ref_loader, val_loader)
-        shift_mag = detector.compute_shift_magnitude(
-            simple_model, target_loader, metric="tvd"
-        )
+        shift_mag = detector.compute_shift_magnitude(simple_model, target_loader, metric="tvd")
 
         assert isinstance(shift_mag, float)
         assert 0 <= shift_mag <= 1  # TVD is in [0, 1]
@@ -367,9 +363,7 @@ class TestLabelShiftDetector:
         target_loader = DataLoader(reference_data, batch_size=32)
 
         detector.fit(simple_model, ref_loader, val_loader)
-        shift_mag = detector.compute_shift_magnitude(
-            simple_model, target_loader, metric="kl"
-        )
+        shift_mag = detector.compute_shift_magnitude(simple_model, target_loader, metric="kl")
 
         assert isinstance(shift_mag, float)
         # KL should be non-negative, but numerical issues can cause small negative values
@@ -382,9 +376,7 @@ class TestLabelShiftDetector:
         target_loader = DataLoader(reference_data, batch_size=32)
 
         detector.fit(simple_model, ref_loader, val_loader)
-        shift_mag = detector.compute_shift_magnitude(
-            simple_model, target_loader, metric="l2"
-        )
+        shift_mag = detector.compute_shift_magnitude(simple_model, target_loader, metric="l2")
 
         assert isinstance(shift_mag, float)
         assert shift_mag >= 0
@@ -398,9 +390,7 @@ class TestLabelShiftDetector:
         detector.fit(simple_model, ref_loader, val_loader)
 
         with pytest.raises(ValueError, match="Unknown metric"):
-            detector.compute_shift_magnitude(
-                simple_model, target_loader, metric="invalid"
-            )
+            detector.compute_shift_magnitude(simple_model, target_loader, metric="invalid")
 
     def test_not_fitted_error(self, reference_data, simple_model):
         detector = LabelShiftDetector(num_classes=3)
@@ -583,3 +573,67 @@ class TestShiftDetectorEdgeCases:
 
         # Scores should be similar (not exact due to floating point)
         assert abs(score1 - score2) < 0.05
+
+
+class TestShiftDetectorsActuallyDetectShifts:
+    """Shift score on shifted data should be > shift score on same-distribution data."""
+
+    @pytest.fixture
+    def ref_loader(self, reference_data):
+        return DataLoader(reference_data, batch_size=32)
+
+    @pytest.fixture
+    def no_shift_loader(self, no_shift_data):
+        return DataLoader(no_shift_data, batch_size=32)
+
+    @pytest.fixture
+    def shifted_loader(self, shifted_data):
+        return DataLoader(shifted_data, batch_size=32)
+
+    def test_mmd_detects_shift(self, ref_loader, no_shift_loader, shifted_loader):
+        detector = MMDShiftDetector(sigma=1.0)
+        detector.fit(ref_loader)
+        s_no_shift = detector.score(no_shift_loader)
+        s_shifted = detector.score(shifted_loader)
+        assert s_shifted > s_no_shift, (
+            f"MMD failed to detect shift: no_shift={s_no_shift:.4f}, " f"shifted={s_shifted:.4f}"
+        )
+
+    def test_energy_detects_shift(self, ref_loader, no_shift_loader, shifted_loader):
+        detector = EnergyShiftDetector()
+        detector.fit(ref_loader)
+        s_no_shift = detector.score(no_shift_loader)
+        s_shifted = detector.score(shifted_loader)
+        assert s_shifted > s_no_shift, (
+            f"EnergyShiftDetector failed to detect shift: "
+            f"no_shift={s_no_shift:.4f}, shifted={s_shifted:.4f}"
+        )
+
+    def test_ks_detects_shift(self, ref_loader, no_shift_loader, shifted_loader):
+        detector = KSShiftDetector()
+        detector.fit(ref_loader)
+        s_no_shift = detector.score(no_shift_loader)
+        s_shifted = detector.score(shifted_loader)
+        assert s_shifted > s_no_shift, (
+            f"KS failed to detect shift: no_shift={s_no_shift:.4f}, " f"shifted={s_shifted:.4f}"
+        )
+
+    def test_classifier_detects_shift(self, ref_loader, no_shift_loader, shifted_loader):
+        detector = ClassifierShiftDetector()
+        detector.fit(ref_loader)
+        s_no_shift = detector.score(no_shift_loader)
+        s_shifted = detector.score(shifted_loader)
+        assert s_shifted > s_no_shift, (
+            f"ClassifierShiftDetector failed to detect shift: "
+            f"no_shift={s_no_shift:.4f}, shifted={s_shifted:.4f}"
+        )
+
+    def test_classifier_identical_data_score_zero(self, reference_data):
+        """When test == reference exactly, score should be ~0 (no shift)."""
+        detector = ClassifierShiftDetector()
+        ref_loader = DataLoader(reference_data, batch_size=32)
+        detector.fit(ref_loader)
+        # Same data
+        score = detector.score(ref_loader)
+        # Should be very close to 0 (short-circuited)
+        assert score < 0.2, f"Expected near-zero shift score, got {score:.3f}"

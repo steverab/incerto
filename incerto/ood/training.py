@@ -5,18 +5,17 @@ Methods that improve OOD detection during training, rather than
 post-hoc after training is complete.
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from typing import Optional, Tuple
 
 
 def mixup_data(
     x: torch.Tensor,
     y: torch.Tensor,
     alpha: float = 1.0,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
     """
     Apply mixup data augmentation.
 
@@ -123,7 +122,7 @@ class OutlierExposureLoss(nn.Module):
         self,
         logits_in: torch.Tensor,
         targets_in: torch.Tensor,
-        logits_out: Optional[torch.Tensor] = None,
+        logits_out: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Compute OE loss.
@@ -182,7 +181,7 @@ class EnergyRegularizedLoss(nn.Module):
         self,
         logits_in: torch.Tensor,
         targets_in: torch.Tensor,
-        logits_out: Optional[torch.Tensor] = None,
+        logits_out: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Compute energy-regularized loss.
@@ -220,7 +219,8 @@ class CutMix:
     CutMix augmentation for improved robustness and OOD detection.
 
     Instead of linearly interpolating images (mixup), cuts and pastes
-    patches between images:
+    patches between images::
+
         x_tilde = M ⊙ x_i + (1-M) ⊙ x_j
         y_tilde = λ*y_i + (1-λ)*y_j
 
@@ -247,7 +247,7 @@ class CutMix:
         self,
         x: torch.Tensor,
         y: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
         """
         Apply CutMix augmentation.
 

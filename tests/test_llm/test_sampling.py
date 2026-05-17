@@ -6,13 +6,13 @@ import pytest
 import torch
 
 from incerto.llm import (
-    SelfConsistency,
-    LexicalSimilarity,
-    VarianceRatio,
-    PredictiveEntropy,
-    MutualInformation,
-    SemanticEntropy,
     EnsembleDisagreement,
+    LexicalSimilarity,
+    MutualInformation,
+    PredictiveEntropy,
+    SelfConsistency,
+    SemanticEntropy,
+    VarianceRatio,
 )
 
 

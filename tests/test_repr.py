@@ -7,24 +7,24 @@ import torch
 import torch.nn as nn
 
 from incerto.calibration import (
+    BetaCalibrator,
+    DirichletCalibrator,
+    HistogramBinningCalibrator,
+    IdentityCalibrator,
+    IsotonicRegressionCalibrator,
+    MatrixScaling,
+    PlattScalingCalibrator,
     TemperatureScaling,
     VectorScaling,
-    MatrixScaling,
-    DirichletCalibrator,
-    BetaCalibrator,
-    IsotonicRegressionCalibrator,
-    HistogramBinningCalibrator,
-    PlattScalingCalibrator,
-    IdentityCalibrator,
 )
-from incerto.ood import Energy, ODIN, Mahalanobis, KNN, MSP, MaxLogit
+from incerto.ood import KNN, MSP, ODIN, Energy, Mahalanobis, MaxLogit
 from incerto.shift import (
-    MMDShiftDetector,
-    EnergyShiftDetector,
-    KSShiftDetector,
     ClassifierShiftDetector,
-    LabelShiftDetector,
+    EnergyShiftDetector,
     ImportanceWeightingShift,
+    KSShiftDetector,
+    LabelShiftDetector,
+    MMDShiftDetector,
 )
 
 

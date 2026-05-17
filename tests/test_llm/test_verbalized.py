@@ -5,10 +5,10 @@ Tests for LLM verbalized uncertainty methods.
 import pytest
 
 from incerto.llm import (
-    VerbalizedConfidence,
+    BidirectionalConsistency,
     PTrue,
     SelfEvaluation,
-    BidirectionalConsistency,
+    VerbalizedConfidence,
 )
 
 
@@ -17,28 +17,24 @@ class TestVerbalizedConfidence:
 
     def test_extract_percentage_percent_sign(self):
         """Test extraction of percentage with % sign."""
-        assert VerbalizedConfidence.extract_percentage(
-            "I'm 85% confident"
-        ) == pytest.approx(0.85)
-        assert VerbalizedConfidence.extract_percentage(
-            "Confidence: 95%"
-        ) == pytest.approx(0.95)
+        assert VerbalizedConfidence.extract_percentage("I'm 85% confident") == pytest.approx(0.85)
+        assert VerbalizedConfidence.extract_percentage("Confidence: 95%") == pytest.approx(0.95)
         assert VerbalizedConfidence.extract_percentage("75.5%") == pytest.approx(0.755)
 
     def test_extract_percentage_word(self):
         """Test extraction of percentage with 'percent' word."""
-        assert VerbalizedConfidence.extract_percentage(
-            "I am 80 percent sure"
-        ) == pytest.approx(0.80)
-        assert VerbalizedConfidence.extract_percentage(
-            "85 percent confidence"
-        ) == pytest.approx(0.85)
+        assert VerbalizedConfidence.extract_percentage("I am 80 percent sure") == pytest.approx(
+            0.80
+        )
+        assert VerbalizedConfidence.extract_percentage("85 percent confidence") == pytest.approx(
+            0.85
+        )
 
     def test_extract_percentage_fraction(self):
         """Test extraction of fraction notation."""
-        assert VerbalizedConfidence.extract_percentage(
-            "My confidence is 90/100"
-        ) == pytest.approx(0.90)
+        assert VerbalizedConfidence.extract_percentage("My confidence is 90/100") == pytest.approx(
+            0.90
+        )
 
     def test_extract_percentage_decimal(self):
         """Test extraction doesn't misinterpret decimals > 1."""
@@ -62,15 +58,11 @@ class TestVerbalizedConfidence:
 
     def test_extract_percentage_confidence_word(self):
         """Test extraction with 'confidence' keyword."""
-        assert VerbalizedConfidence.extract_percentage(
-            "My confidence is 75"
-        ) == pytest.approx(0.75)
+        assert VerbalizedConfidence.extract_percentage("My confidence is 75") == pytest.approx(0.75)
 
     def test_get_confidence_prompt(self):
         """Test prompt generation."""
-        prompt = VerbalizedConfidence.get_confidence_prompt(
-            "What is 2+2?", "The answer is 4"
-        )
+        prompt = VerbalizedConfidence.get_confidence_prompt("What is 2+2?", "The answer is 4")
         assert "What is 2+2?" in prompt
         assert "The answer is 4" in prompt
         assert "confident" in prompt.lower()
@@ -89,9 +81,7 @@ class TestPTrue:
     def test_extract_probability_decimal(self):
         """Test extraction of decimal probabilities."""
         assert PTrue.extract_probability("0.85") == pytest.approx(0.85)
-        assert PTrue.extract_probability("The probability is 0.92") == pytest.approx(
-            0.92
-        )
+        assert PTrue.extract_probability("The probability is 0.92") == pytest.approx(0.92)
 
     def test_extract_probability_percentage(self):
         """Test extraction and conversion of percentages."""
@@ -152,11 +142,28 @@ class TestBidirectionalConsistency:
         assert consistency == 0.0
 
     def test_compute_consistency_partial(self):
-        """Test consistency with some matching answers."""
-        answers = ["4", "4", "5"]  # 2 same, 1 different
+        """Test consistency with some matching answers (token Jaccard default)."""
+        answers = ["4", "4", "5"]
+        # pairs: (4,4)=1, (4,5)=0, (4,5)=0  →  mean = 1/3
         consistency = BidirectionalConsistency.compute_consistency(answers)
-        # 2 unique out of 3, so consistency = 1 - (2-1)/(3-1) = 1 - 0.5 = 0.5
+        assert consistency == pytest.approx(1.0 / 3.0)
+
+    def test_compute_consistency_partial_exact(self):
+        """Legacy exact-match: 2 unique out of 3 → 0.5."""
+        answers = ["4", "4", "5"]
+        consistency = BidirectionalConsistency.compute_consistency(answers, match="exact")
         assert consistency == pytest.approx(0.5)
+
+    def test_compute_consistency_token_overlap_with_long_text(self):
+        """Token-overlap survives small phrasing differences."""
+        answers = [
+            "The capital of Japan is Tokyo.",
+            "The capital of Japan is Tokyo. It is located in...",
+            "Tokyo, also known as the City of Light.",
+        ]
+        c = BidirectionalConsistency.compute_consistency(answers)
+        # All share "Tokyo" → non-zero overlap (old exact-match would give 0.0).
+        assert c > 0.0
 
     def test_compute_consistency_single_answer(self):
         """Test consistency with single answer."""

@@ -5,15 +5,14 @@ Uses matplotlib exclusively to keep dependencies minimal.
 """
 
 from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import torch
 
 from .metrics import accuracy_coverage_curve
 
 
-def _ideal_risk_curve(
-    logits: torch.Tensor, y: torch.Tensor
-) -> tuple[torch.Tensor, torch.Tensor]:
+def _ideal_risk_curve(logits: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Return (coverage, risk) for an oracle that rejects all errors first."""
     n = len(y)
     preds = logits.argmax(dim=-1)
@@ -67,9 +66,7 @@ def plot_risk_coverage(
     if show_bounds:
         # Random baseline: constant risk equal to overall error rate
         overall_risk = 1.0 - (logits.argmax(-1) == y).float().mean().item()
-        ax.axhline(
-            overall_risk, color="gray", linestyle=":", linewidth=1.5, label="Random"
-        )
+        ax.axhline(overall_risk, color="gray", linestyle=":", linewidth=1.5, label="Random")
         # Ideal (oracle): reject all errors first
         ideal_cov, ideal_risk = _ideal_risk_curve(logits, y)
         ax.plot(
@@ -123,9 +120,7 @@ def plot_accuracy_coverage(
     if show_bounds:
         # Random baseline: constant accuracy equal to overall accuracy
         overall_acc = (logits.argmax(-1) == y).float().mean().item()
-        ax.axhline(
-            overall_acc, color="gray", linestyle=":", linewidth=1.5, label="Random"
-        )
+        ax.axhline(overall_acc, color="gray", linestyle=":", linewidth=1.5, label="Random")
         # Ideal (oracle): include all correct samples first
         ideal_cov, ideal_acc = _ideal_accuracy_curve(logits, y)
         ax.plot(

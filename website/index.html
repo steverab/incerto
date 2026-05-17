@@ -428,9 +428,9 @@ with torch.no_grad():
 test_logits = torch.cat(test_logits)
 test_labels = torch.cat(test_labels)
 
-# Calibrate and evaluate
-calibrated_probs = calibrator.predict(test_logits).probs
-ece = ece_score(calibrated_probs, test_labels)
+# Calibrate and evaluate — pass logits (not probs) to ece_score
+calibrated_logits = calibrator(test_logits)
+ece = ece_score(calibrated_logits, test_labels)
 print(f"Expected Calibration Error: {ece:.4f}")</code></pre>
                         </div>
                     </div>
@@ -579,13 +579,13 @@ predictions = logits.argmax(dim=1)
 print(f"Rejected: {rejected.sum()}/{len(labels)} "
       f"({rejected.float().mean()*100:.1f}%)")
 
-# Compute selective metrics
+# Compute selective metrics — these helpers take the *reject* mask
 if accepted.any():
     selective_acc = (predictions[accepted] == labels[accepted]).float().mean()
     print(f"Accuracy on accepted: {selective_acc*100:.2f}%")
 
-    cov = coverage(accepted)
-    risk_val = risk(predictions, labels, accepted)
+    cov = coverage(rejected)
+    risk_val = risk(predictions, labels, rejected)
     print(f"Coverage: {cov:.3f}")
     print(f"Selective risk: {risk_val:.4f}")</code></pre>
                         </div>

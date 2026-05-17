@@ -27,9 +27,30 @@ class _FeatureHookMixin:
 
 
 class MSP(OODDetector):
-    """Maximum-Softmax-Probability (Hendrycks & Gimpel, 2017)."""
+    """Maximum-Softmax-Probability (MSP) baseline OOD detector.
 
-    def score(self, x):
+    Returns ``1 - max softmax probability`` as the OOD score, so higher means
+    more likely OOD. Despite its simplicity, MSP is a strong baseline.
+
+    Reference:
+        Hendrycks & Gimpel, "A Baseline for Detecting Misclassified and
+        Out-of-Distribution Examples in Neural Networks", ICLR 2017.
+
+    Args:
+        model: A trained classifier returning logits of shape
+            ``(batch, n_classes)``.
+    """
+
+    def score(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute OOD scores for a batch of inputs.
+
+        Args:
+            x: Input batch passed to ``model``.
+
+        Returns:
+            Tensor of shape ``(batch,)`` with values in ``[0, 1)``. Higher
+            values indicate higher OOD likelihood.
+        """
         logits = self.model(x)
         return 1 - F.softmax(logits, dim=-1).max(dim=-1).values
 
@@ -38,13 +59,35 @@ class MSP(OODDetector):
 
 
 class Energy(OODDetector):
-    """Energy-based score (Liu et al., NeurIPS 2020)."""
+    """Energy-based OOD detector.
 
-    def __init__(self, model, temperature=1.0):
+    Computes the free-energy score ``-T * logsumexp(logits / T)`` for each
+    input. Lower energy is associated with in-distribution data, so the
+    returned score (negated logsumexp) is *higher* for OOD inputs.
+
+    Reference:
+        Liu et al., "Energy-based Out-of-distribution Detection", NeurIPS 2020.
+
+    Args:
+        model: A trained classifier returning logits of shape
+            ``(batch, n_classes)``.
+        temperature: Temperature ``T`` applied to logits before logsumexp.
+            Default: 1.0.
+    """
+
+    def __init__(self, model, temperature: float = 1.0):
         super().__init__(model)
         self.temperature = temperature
 
-    def score(self, x):
+    def score(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute energy-based OOD scores.
+
+        Args:
+            x: Input batch passed to ``model``.
+
+        Returns:
+            Tensor of shape ``(batch,)`` of energy scores; higher means more OOD.
+        """
         e = -torch.logsumexp(self.model(x) / self.temperature, dim=-1)
         return e
 
@@ -135,9 +178,7 @@ class Mahalanobis(_FeatureHookMixin, OODDetector):
             labels.append(y.cpu())
         acts = torch.cat(acts)
         labels = torch.cat(labels)
-        self.class_means = torch.stack(
-            [acts[labels == c].mean(0) for c in torch.unique(labels)]
-        )
+        self.class_means = torch.stack([acts[labels == c].mean(0) for c in torch.unique(labels)])
         cov = torch.cov(acts.T)
         ridge = max(1e-6, 1e-6 * cov.diag().mean().item())
         self.precision = torch.linalg.inv(cov + ridge * torch.eye(cov.size(0)))
@@ -167,19 +208,15 @@ class Mahalanobis(_FeatureHookMixin, OODDetector):
 
     def load_state_dict(self, state: dict) -> None:
         """Load fitted Mahalanobis parameters."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.class_means = state["class_means"]
             self.precision = state["precision"]
             new_layer = state.get("layer_name", "penultimate")
             if new_layer != self._layer_name:
                 self._layer_name = new_layer
                 self.layer = self._hook(new_layer)
-        except SerializationError:
-            raise
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         fitted = self.class_means is not None
@@ -261,19 +298,15 @@ class KNN(_FeatureHookMixin, OODDetector):
 
     def load_state_dict(self, state: dict) -> None:
         """Load KNN training features."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.k = state["k"]
             self.train_features = state["train_features"]
             new_layer = state.get("layer_name", "penultimate")
             if new_layer != self._layer_name:
                 self._layer_name = new_layer
                 self.layer = self._hook(new_layer)
-        except SerializationError:
-            raise
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def __repr__(self) -> str:
         fitted = self.train_features is not None

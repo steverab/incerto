@@ -7,13 +7,12 @@ import torch
 import torch.nn as nn
 
 from incerto.active.utils import (
-    split_labeled_unlabeled,
+    active_learning_loop,
     compute_diversity_penalty,
     greedy_k_center,
+    split_labeled_unlabeled,
     subsample_for_efficiency,
-    active_learning_loop,
 )
-
 
 # ---------------------------------------------------------------------------
 # split_labeled_unlabeled
@@ -36,9 +35,7 @@ class TestSplitLabeledUnlabeled:
         data = torch.randn(10, 5)
         labeled_idx = torch.tensor([0, 2, 4])
 
-        x_lab, x_unlab, y_lab, lab_idx = split_labeled_unlabeled(
-            data, labeled_indices=labeled_idx
-        )
+        x_lab, x_unlab, y_lab, lab_idx = split_labeled_unlabeled(data, labeled_indices=labeled_idx)
 
         assert len(x_lab) == 3
         assert len(x_unlab) == 7
@@ -89,9 +86,7 @@ class TestComputeDiversityPenalty:
 
     def test_single_sample_min_distance(self):
         features = torch.randn(10, 5)
-        result = compute_diversity_penalty(
-            torch.tensor([0]), features, method="min_distance"
-        )
+        result = compute_diversity_penalty(torch.tensor([0]), features, method="min_distance")
         assert result.item() == float("inf")
 
     def test_min_distance(self):
@@ -209,8 +204,8 @@ class _TinyModel(nn.Module):
 
 class TestActiveLearningLoop:
     def test_basic_loop(self):
-        from incerto.active.strategies import UncertaintySampling
         from incerto.active.acquisition import EntropyAcquisition
+        from incerto.active.strategies import UncertaintySampling
 
         torch.manual_seed(42)
         model = _TinyModel()
@@ -246,8 +241,8 @@ class TestActiveLearningLoop:
         assert len(results["selected_indices"]) == 3
 
     def test_loop_exhausts_pool(self):
-        from incerto.active.strategies import UncertaintySampling
         from incerto.active.acquisition import EntropyAcquisition
+        from incerto.active.strategies import UncertaintySampling
 
         torch.manual_seed(42)
         model = _TinyModel()

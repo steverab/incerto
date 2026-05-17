@@ -6,6 +6,15 @@ with finite-sample coverage guarantees.
 
 .. currentmodule:: incerto.conformal
 
+Core Predictor
+--------------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   ConformalPredictor
+
 Classification Methods
 ----------------------
 
@@ -57,7 +66,6 @@ Utilities
    :toctree: _autosummary
    :recursive:
 
-   ConformalPredictor
    compute_quantile
    prediction_set_from_scores
    split_data

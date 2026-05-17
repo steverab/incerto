@@ -1,18 +1,18 @@
 """Tests for shift detection visualization functions."""
 
+import matplotlib
 import pytest
 import torch
-import matplotlib
 
 matplotlib.use("Agg")  # Non-interactive backend for testing
 import matplotlib.pyplot as plt
 
 from incerto.shift.visual import (
-    plot_feature_histograms,
-    plot_embedding_space,
     plot_confidence_distributions,
-    plot_shift_severity,
+    plot_embedding_space,
+    plot_feature_histograms,
     plot_ks_statistics,
+    plot_shift_severity,
 )
 
 
@@ -46,9 +46,7 @@ class TestPlotFeatureHistograms:
 
     def test_custom_features(self, ref_data, test_data):
         """Should plot specified features."""
-        fig = plot_feature_histograms(
-            ref_data, test_data, feature_ids=[0, 2, 5], show=False
-        )
+        fig = plot_feature_histograms(ref_data, test_data, feature_ids=[0, 2, 5], show=False)
         assert len(fig.axes) == 3
         plt.close(fig)
 

@@ -5,14 +5,14 @@ Specialized plotting functions for language model uncertainty analysis.
 """
 
 from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from typing import List
 
 
 def plot_token_uncertainty(
-    tokens: List[str],
+    tokens: list[str],
     uncertainties: np.ndarray | torch.Tensor,
     ax=None,
     title: str = "Token-Level Uncertainty",
@@ -103,12 +103,10 @@ def plot_confidence_vs_correctness(
 
     # Plot actual calibration
     if bin_centers:
-        ax.plot(
-            bin_centers, bin_accuracies, "o-", label="Model", linewidth=2, markersize=8
-        )
+        ax.plot(bin_centers, bin_accuracies, "o-", label="Model", linewidth=2, markersize=8)
 
         # Add gap bars
-        for center, accuracy, count in zip(bin_centers, bin_accuracies, bin_counts):
+        for center, accuracy, _count in zip(bin_centers, bin_accuracies, bin_counts, strict=False):
             gap = accuracy - center
             ax.bar(
                 center,
@@ -131,7 +129,7 @@ def plot_confidence_vs_correctness(
 
 
 def plot_generation_diversity(
-    responses: List[str],
+    responses: list[str],
     max_display: int = 10,
     ax=None,
     title: str = "Generation Diversity",
@@ -170,8 +168,8 @@ def plot_generation_diversity(
 
 
 def plot_semantic_clusters(
-    responses: List[str],
-    clusters: List[int],
+    responses: list[str],
+    clusters: list[int],
     ax=None,
     title: str = "Semantic Clusters",
 ):
@@ -299,8 +297,8 @@ def plot_uncertainty_distribution(
 
 
 def plot_length_vs_confidence(
-    lengths: List[int],
-    confidences: List[float],
+    lengths: list[int],
+    confidences: list[float],
     ax=None,
     title: str = "Sequence Length vs. Confidence",
 ):

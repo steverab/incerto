@@ -7,31 +7,31 @@ from .base import BaseShiftDetector
 
 # Shift detection methods
 from .methods import (
-    MMDShiftDetector,
-    EnergyShiftDetector,
-    KSShiftDetector,
-    ClassifierShiftDetector,
     BBSDDetector,
-    LabelShiftDetector,
+    ClassifierShiftDetector,
+    EnergyShiftDetector,
     ImportanceWeightingShift,
+    KSShiftDetector,
+    LabelShiftDetector,
+    MMDShiftDetector,
 )
 
 # Metrics
 from .metrics import (
     energy_distance,
-    total_variation,
     population_stability_index,
-    wasserstein_distance,
     sliced_wasserstein_distance,
+    total_variation,
+    wasserstein_distance,
 )
 
 # Visualization
 from .visual import (
-    plot_feature_histograms,
-    plot_embedding_space,
     plot_confidence_distributions,
-    plot_shift_severity,
+    plot_embedding_space,
+    plot_feature_histograms,
     plot_ks_statistics,
+    plot_shift_severity,
 )
 
 __all__ = [

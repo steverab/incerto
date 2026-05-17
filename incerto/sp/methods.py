@@ -61,15 +61,11 @@ class DeepGambler(BaseSelectivePredictor):
         Theory", NeurIPS 2019.
     """
 
-    def __init__(
-        self, backbone: nn.Module, num_classes: int, num_features: int | None = None
-    ):
+    def __init__(self, backbone: nn.Module, num_classes: int, num_features: int | None = None):
         super().__init__()
         self.backbone = backbone
         # small linear head that outputs C + 1 logits (extra abstain)
-        last_dim = (
-            num_features if num_features is not None else _infer_output_dim(backbone)
-        )
+        last_dim = num_features if num_features is not None else _infer_output_dim(backbone)
         self.head = nn.Linear(last_dim, num_classes + 1)
         # Initialise the abstain logit bias to a negative value so the model
         # starts by predicting classes rather than collapsing to always-abstain.
@@ -91,8 +87,12 @@ class DeepGambler(BaseSelectivePredictor):
         targets: torch.Tensor,
         reward: float = 2.2,
     ) -> torch.Tensor:
-        """
-        Gambler's loss from Ziyin et al. (NeurIPS 2019).
+        """Gambler's loss from Ziyin et al. (NeurIPS 2019).
+
+        Stateless utility — callable either as ``DeepGambler.gambler_loss(...)``
+        or ``gambler.gambler_loss(...)``. (Note: by contrast,
+        :meth:`SelectiveNet.selective_loss` is an instance method because it
+        consumes ``self.alpha`` and ``self.lam``.)
 
         The loss encourages the model to either predict correctly or abstain:
 
@@ -101,12 +101,18 @@ class DeepGambler(BaseSelectivePredictor):
         where ``o`` = reward, ``p_y`` = P(true class), ``r`` = P(abstain).
         Higher ``reward`` penalises abstention more, pushing towards prediction.
 
+        Note:
+            For very small ``p_target + reserve / reward`` (e.g. strongly
+            confident wrong predictions) the loss can be large (~20+). This
+            is expected: the loss is unbounded and the ``1e-9`` term is only
+            for numerical stability around log(0).
+
         Args:
-            logits: Model output of shape (batch, num_classes + 1).
-                    Last column is the abstain logit.
-            targets: Ground-truth class labels of shape (batch,).
+            logits: Model output of shape ``(batch, num_classes + 1)``.
+                Last column is the abstain logit.
+            targets: Ground-truth class labels of shape ``(batch,)``.
             reward: Reward for correct prediction (called *o* in the paper).
-                    Must be > 1. Higher values discourage abstention.
+                Must be > 1. Higher values discourage abstention.
 
         Returns:
             Scalar loss.
@@ -114,12 +120,10 @@ class DeepGambler(BaseSelectivePredictor):
         probs = F.softmax(logits, dim=-1)
         num_classes = logits.size(-1) - 1
         class_probs = probs[:, :num_classes]
-        reserve = probs[:, -1]  # P(abstain)
+        reserve = probs[:, -1]
 
-        # Probability assigned to the true class
         p_target = class_probs.gather(1, targets.unsqueeze(1)).squeeze(1)
 
-        # Gambler's loss: −log( p_target + reserve / o )
         loss = -torch.log(p_target + reserve / reward + 1e-9)
         return loss.mean()
 
@@ -128,11 +132,12 @@ class DeepGambler(BaseSelectivePredictor):
 #                         3. SelectiveNet
 # ----------------------------------------------------------------------
 class SelectiveNet(BaseSelectivePredictor):
-    """
-    Implementation of SelectiveNet (Geifman & El-Yaniv, 2019).
+    """Implementation of SelectiveNet (Geifman & El-Yaniv, 2019).
+
     The model outputs:
-        * h(x): class logits
-        * g(x): selection probability
+
+    - ``h(x)``: class logits
+    - ``g(x)``: selection probability
     """
 
     def __init__(
@@ -146,9 +151,7 @@ class SelectiveNet(BaseSelectivePredictor):
     ):
         super().__init__()
         self.backbone = backbone
-        last_dim = (
-            num_features if num_features is not None else _infer_output_dim(backbone)
-        )
+        last_dim = num_features if num_features is not None else _infer_output_dim(backbone)
 
         self.h = nn.Linear(last_dim, num_classes)
         self.g = nn.Sequential(
@@ -224,9 +227,7 @@ class SelectiveNet(BaseSelectivePredictor):
         # Selection-weighted cross-entropy
         per_sample_loss = F.cross_entropy(logits, targets, reduction="none")
         empirical_coverage = selection.mean()
-        selective_loss = (per_sample_loss * selection).mean() / (
-            empirical_coverage + 1e-9
-        )
+        selective_loss = (per_sample_loss * selection).mean() / (empirical_coverage + 1e-9)
 
         # Quadratic coverage penalty
         coverage_penalty = self.lam * torch.clamp(c - empirical_coverage, min=0.0) ** 2
@@ -294,9 +295,7 @@ class SelfAdaptiveTraining(BaseSelectivePredictor):
             return self.alpha_start
 
         # Linear schedule from alpha_start to alpha_end
-        progress = (epoch - self.warmup_epochs) / max(
-            total_epochs - self.warmup_epochs, 1
-        )
+        progress = (epoch - self.warmup_epochs) / max(total_epochs - self.warmup_epochs, 1)
         alpha = self.alpha_start + (self.alpha_end - self.alpha_start) * progress
         return min(alpha, self.alpha_end)
 

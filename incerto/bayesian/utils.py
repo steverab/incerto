@@ -3,8 +3,8 @@ Utility functions for Bayesian deep learning.
 """
 
 from __future__ import annotations
+
 import torch
-from typing import Tuple
 
 
 def predictive_entropy(predictions: torch.Tensor) -> torch.Tensor:
@@ -62,9 +62,7 @@ def mutual_information(predictions: torch.Tensor) -> torch.Tensor:
         Mutual information of shape (batch_size,)
     """
     # Expected entropy: E_θ[H[y|x,θ]]
-    expected_entropy = (
-        -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
-    )
+    expected_entropy = -(predictions * torch.log(predictions + 1e-10)).sum(dim=-1).mean(dim=0)
 
     # Entropy of mean: H[E_θ[y|x,θ]]
     mean_probs = predictions.mean(dim=0)
@@ -116,7 +114,7 @@ def expected_calibration_error(
 
 def decompose_uncertainty(
     predictions: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Decompose predictive uncertainty into epistemic and aleatoric components.
 
@@ -185,7 +183,7 @@ def sample_from_posterior(
 
 def ensemble_predictions_to_distribution(
     predictions: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Convert ensemble predictions to mean and variance.
 

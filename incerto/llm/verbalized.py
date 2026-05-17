@@ -6,6 +6,7 @@ from the language model through natural language.
 """
 
 from __future__ import annotations
+
 import re
 
 
@@ -182,21 +183,37 @@ class BidirectionalConsistency:
         return paraphrases
 
     @staticmethod
-    def compute_consistency(answers: list[str]) -> float:
-        """
-        Compute consistency across answers.
+    def compute_consistency(answers: list[str], match: str = "tokens") -> float:
+        """Compute consistency across answers to paraphrased questions.
 
         Args:
-            answers: List of answers to paraphrased questions
+            answers: List of answers to paraphrased questions.
+            match: Matching strategy. ``"tokens"`` (default) uses the mean
+                pairwise Jaccard overlap of lowercased word sets — robust to
+                small wording differences. ``"exact"`` uses the fraction of
+                identical answers (legacy strict behaviour); best when
+                answers are short canonical strings.
 
         Returns:
-            Consistency score (0-1), higher = more consistent
+            Consistency score in ``[0, 1]``; higher means more consistent.
         """
         if len(answers) < 2:
             return 1.0
 
-        # Simple exact match
-        unique_answers = len(set(answers))
-        consistency = 1.0 - ((unique_answers - 1) / (len(answers) - 1))
+        if match == "exact":
+            unique_answers = len(set(answers))
+            return 1.0 - ((unique_answers - 1) / (len(answers) - 1))
 
-        return consistency
+        # Token-set Jaccard, averaged over all unordered pairs
+        token_sets = [set(a.lower().split()) for a in answers if a.strip()]
+        if len(token_sets) < 2:
+            return 1.0
+        sims = []
+        for i in range(len(token_sets)):
+            for j in range(i + 1, len(token_sets)):
+                a, b = token_sets[i], token_sets[j]
+                union = a | b
+                if not union:
+                    continue
+                sims.append(len(a & b) / len(union))
+        return float(sum(sims) / len(sims)) if sims else 0.0

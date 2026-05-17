@@ -5,7 +5,8 @@ incerto.shift_detection.visual
 Tiny helpers for fast diagnostics; rely on matplotlib but never seaborn.
 """
 
-from typing import Iterable
+from collections.abc import Iterable
+
 import matplotlib.pyplot as plt
 import torch
 
@@ -30,16 +31,12 @@ def plot_feature_histograms(
     Returns:
         The matplotlib Figure object for further customization
     """
-    feature_ids = (
-        list(feature_ids) if feature_ids is not None else range(min(5, ref.shape[1]))
-    )
+    feature_ids = list(feature_ids) if feature_ids is not None else range(min(5, ref.shape[1]))
     n = len(feature_ids)
     fig, axes = plt.subplots(nrows=n, figsize=(6, 2 * n))
     axes = axes if n > 1 else [axes]
-    for ax, idx in zip(axes, feature_ids):
-        ax.hist(
-            ref[:, idx].cpu(), bins=bins, alpha=0.5, label="reference", density=True
-        )
+    for ax, idx in zip(axes, feature_ids, strict=False):
+        ax.hist(ref[:, idx].cpu(), bins=bins, alpha=0.5, label="reference", density=True)
         ax.hist(test[:, idx].cpu(), bins=bins, alpha=0.5, label="test", density=True)
         ax.set_title(f"Feature {idx}")
     axes[0].legend()

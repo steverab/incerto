@@ -7,9 +7,9 @@ import torch
 
 from incerto.llm import (
     BeamSearchUncertainty,
-    NucleusSamplingUncertainty,
-    IDontKnowDetection,
     ContrastiveDecoding,
+    IDontKnowDetection,
+    NucleusSamplingUncertainty,
 )
 
 
@@ -50,12 +50,8 @@ class TestBeamSearchUncertainty:
         """Test temperature affects entropy."""
         beam_scores = torch.tensor([-1.0, -2.0, -3.0])
 
-        result_t1 = BeamSearchUncertainty.compute_from_scores(
-            beam_scores, temperature=1.0
-        )
-        result_t01 = BeamSearchUncertainty.compute_from_scores(
-            beam_scores, temperature=0.1
-        )
+        result_t1 = BeamSearchUncertainty.compute_from_scores(beam_scores, temperature=1.0)
+        result_t01 = BeamSearchUncertainty.compute_from_scores(beam_scores, temperature=0.1)
 
         # Lower temperature should sharpen distribution -> lower entropy
         assert result_t01["entropy"] < result_t1["entropy"]
@@ -108,9 +104,7 @@ class TestNucleusSamplingUncertainty:
         logits = torch.zeros(vocab_size)
         logits[0] = 100.0  # First token dominates
 
-        mass = NucleusSamplingUncertainty.probability_mass_concentration(
-            logits, top_k=1
-        )
+        mass = NucleusSamplingUncertainty.probability_mass_concentration(logits, top_k=1)
         assert mass > 0.99
 
     def test_probability_mass_concentration_uniform(self):
@@ -118,9 +112,7 @@ class TestNucleusSamplingUncertainty:
         vocab_size = 100
         logits = torch.zeros(vocab_size)
 
-        mass = NucleusSamplingUncertainty.probability_mass_concentration(
-            logits, top_k=10
-        )
+        mass = NucleusSamplingUncertainty.probability_mass_concentration(logits, top_k=10)
         # Top-10 of uniform 100 should have ~10% mass
         assert mass == pytest.approx(0.1, abs=0.01)
 
@@ -158,9 +150,7 @@ class TestIDontKnowDetection:
 
     def test_extract_hedging_no_hedges(self):
         """Test hedging extraction with no hedging."""
-        result = IDontKnowDetection.extract_confidence_from_hedging(
-            "The answer is definitely 42"
-        )
+        result = IDontKnowDetection.extract_confidence_from_hedging("The answer is definitely 42")
         assert result["hedges_found"] == []
         assert result["num_hedges"] == 0
         assert result["estimated_confidence"] == 1.0
@@ -194,9 +184,7 @@ class TestContrastiveDecoding:
         expert_logits = torch.randn(10, 100)
         amateur_logits = torch.randn(10, 100)
 
-        scores = ContrastiveDecoding.compute_contrastive_score(
-            expert_logits, amateur_logits
-        )
+        scores = ContrastiveDecoding.compute_contrastive_score(expert_logits, amateur_logits)
         assert scores.shape == (10, 100)
 
     def test_compute_contrastive_score_alpha_effect(self):
@@ -218,9 +206,7 @@ class TestContrastiveDecoding:
         """Test contrastive score when models are identical."""
         logits = torch.randn(5, 50)
 
-        scores = ContrastiveDecoding.compute_contrastive_score(
-            logits, logits, alpha=1.0
-        )
+        scores = ContrastiveDecoding.compute_contrastive_score(logits, logits, alpha=1.0)
         # When expert == amateur, score = expert_prob - 1*amateur_prob = 0
         assert torch.allclose(scores, torch.zeros_like(scores), atol=1e-5)
 
@@ -229,9 +215,7 @@ class TestContrastiveDecoding:
         expert_logits = torch.randn(10, 100)
         amateur_logits = torch.randn(10, 100)
 
-        disagreement = ContrastiveDecoding.disagreement_score(
-            expert_logits, amateur_logits
-        )
+        disagreement = ContrastiveDecoding.disagreement_score(expert_logits, amateur_logits)
         assert disagreement.shape == (10,)
 
     def test_disagreement_score_non_negative(self):
@@ -239,9 +223,7 @@ class TestContrastiveDecoding:
         expert_logits = torch.randn(5, 50)
         amateur_logits = torch.randn(5, 50)
 
-        disagreement = ContrastiveDecoding.disagreement_score(
-            expert_logits, amateur_logits
-        )
+        disagreement = ContrastiveDecoding.disagreement_score(expert_logits, amateur_logits)
         assert (disagreement >= -1e-5).all()
 
     def test_disagreement_score_identical_zero(self):

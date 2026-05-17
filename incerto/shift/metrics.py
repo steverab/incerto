@@ -7,6 +7,7 @@ Designed so that you can mix and match with your own detectors.
 """
 
 from __future__ import annotations
+
 import torch
 
 

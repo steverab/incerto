@@ -12,35 +12,35 @@ Submodules:
 
 # Core methods
 from .methods import (
-    BaseBayesianMethod,
-    MCDropout,
-    DeepEnsemble,
     SWAG,
-    LaplaceApproximation,
-    VariationalBayesNN,
+    BaseBayesianMethod,
+    DeepEnsemble,
     GaussianLinear,
-)
-
-# Utilities
-from .utils import (
-    predictive_entropy,
-    mutual_information,
-    expected_calibration_error,
-    decompose_uncertainty,
-    compute_disagreement,
-    sample_from_posterior,
-    ensemble_predictions_to_distribution,
+    LaplaceApproximation,
+    MCDropout,
+    VariationalBayesNN,
 )
 
 # Metrics
 from .metrics import (
-    ensemble_diversity,
-    uncertainty_quality,
-    disagreement,
-    negative_log_likelihood,
     brier_score,
+    disagreement,
+    ensemble_diversity,
+    negative_log_likelihood,
     predictive_log_likelihood,
     sharpness,
+    uncertainty_quality,
+)
+
+# Utilities
+from .utils import (
+    compute_disagreement,
+    decompose_uncertainty,
+    ensemble_predictions_to_distribution,
+    expected_calibration_error,
+    mutual_information,
+    predictive_entropy,
+    sample_from_posterior,
 )
 
 __all__ = [

@@ -8,12 +8,12 @@ import torch
 import torch.nn as nn
 
 from incerto.calibration.training import (
-    LabelSmoothingLoss,
-    FocalLoss,
     ConfidencePenalty,
+    FocalLoss,
+    LabelSmoothingLoss,
+    TemperatureAwareTraining,
     evidential_loss,
     get_uncertainty_from_evidence,
-    TemperatureAwareTraining,
 )
 
 
@@ -175,15 +175,9 @@ class TestConfidencePenalty:
 
     def test_beta_scaling(self, multiclass_logits, multiclass_labels):
         """Test beta parameter scales the entropy regularization."""
-        loss_beta_zero = ConfidencePenalty(beta=0.0)(
-            multiclass_logits, multiclass_labels
-        )
-        loss_beta_small = ConfidencePenalty(beta=0.01)(
-            multiclass_logits, multiclass_labels
-        )
-        loss_beta_large = ConfidencePenalty(beta=1.0)(
-            multiclass_logits, multiclass_labels
-        )
+        loss_beta_zero = ConfidencePenalty(beta=0.0)(multiclass_logits, multiclass_labels)
+        loss_beta_small = ConfidencePenalty(beta=0.01)(multiclass_logits, multiclass_labels)
+        loss_beta_large = ConfidencePenalty(beta=1.0)(multiclass_logits, multiclass_labels)
 
         # CP = CE - beta * entropy
         # Larger beta subtracts more entropy, so smaller loss (encourages uncertainty)
@@ -311,9 +305,7 @@ class TestGetUncertaintyFromEvidence:
         assert (result["alpha"] >= 1).all()
 
         # Belief should sum to 1
-        assert torch.allclose(
-            result["belief"].sum(dim=1), torch.ones(batch_size), atol=1e-5
-        )
+        assert torch.allclose(result["belief"].sum(dim=1), torch.ones(batch_size), atol=1e-5)
 
         # Uncertainties should be non-negative
         assert (result["uncertainty"] >= 0).all()

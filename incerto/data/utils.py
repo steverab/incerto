@@ -5,17 +5,19 @@ Helper functions for dataset manipulation and analysis.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+
+import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset
-from typing import List, Optional, Callable
-import numpy as np
 
 
 def _get_targets(dataset: Dataset) -> np.ndarray:
     """Extract target labels from a dataset, handling nested Subset/TransformDataset wrapping."""
     indices = None
     current = dataset
-    while isinstance(current, (Subset, TransformDataset)):
+    while isinstance(current, Subset | TransformDataset):
         if isinstance(current, Subset):
             subset_indices = np.array(current.indices)
             if indices is None:
@@ -40,9 +42,9 @@ def _get_targets(dataset: Dataset) -> np.ndarray:
 
 def split_dataset(
     dataset: Dataset,
-    splits: List[float],
+    splits: list[float],
     seed: int = 42,
-) -> List[Subset]:
+) -> list[Subset]:
     """
     Split dataset into multiple subsets.
 
@@ -84,7 +86,7 @@ def split_dataset(
 
 def filter_dataset_by_class(
     dataset: Dataset,
-    classes: List[int],
+    classes: list[int],
     invert: bool = False,
 ) -> Subset:
     """
@@ -173,7 +175,7 @@ def compute_dataset_statistics(
         targets = _get_targets(dataset)
         unique, counts = np.unique(targets, return_counts=True)
         stats["num_classes"] = len(unique)
-        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
+        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist(), strict=False))
         stats["min_class_size"] = int(counts.min())
         stats["max_class_size"] = int(counts.max())
         stats["mean_class_size"] = float(counts.mean())
@@ -187,7 +189,7 @@ def compute_dataset_statistics(
 def create_imbalanced_dataset(
     dataset: Dataset,
     imbalance_ratio: float = 0.1,
-    minority_classes: Optional[List[int]] = None,
+    minority_classes: list[int] | None = None,
     seed: int = 42,
 ) -> Subset:
     """
@@ -281,7 +283,7 @@ class LabelNoiseDataset(Dataset):
         self,
         dataset: Dataset,
         noise_rate: float = 0.1,
-        num_classes: Optional[int] = None,
+        num_classes: int | None = None,
         seed: int = 42,
     ):
         """
@@ -322,9 +324,7 @@ class LabelNoiseDataset(Dataset):
         for idx in noisy_indices:
             original_label = labels[idx]
             # Choose different label
-            possible_labels = [
-                i for i in range(self.num_classes) if i != original_label
-            ]
+            possible_labels = [i for i in range(self.num_classes) if i != original_label]
             labels[idx] = rng.choice(possible_labels)
 
         return labels

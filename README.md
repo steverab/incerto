@@ -17,7 +17,9 @@
 Latin *incerto* = "uncertain, doubtful, unsure".
 
 > [!WARNING]
-> This is an alpha release. The API may change without notice. Please report any issues on [GitHub](https://github.com/steverab/incerto/issues).
+> This is a v0.1 alpha release. The API may change without notice before v1.0.
+> Tested with PyTorch ≥ 2.0, NumPy ≥ 1.24, scikit-learn ≥ 1.3, scipy ≥ 1.11.
+> Please report any issues on [GitHub](https://github.com/steverab/incerto/issues).
 
 ## 🎯 Key Features
 
@@ -124,7 +126,7 @@ val_labels = torch.cat(val_labels)
 # Fit temperature scaling on validation set
 calibrator = TemperatureScaling()
 calibrator.fit(val_logits, val_labels)
-print(f"Learned temperature: {calibrator.temperature:.4f}")
+print(f"Learned temperature: {calibrator.temperature.item():.4f}")
 
 # Apply calibration to test set
 test_logits, test_labels = [], []
@@ -164,15 +166,8 @@ detector = Energy(model, temperature=1.0)
 id_scores = torch.cat([detector.score(x) for x, _ in id_loader])
 ood_scores = torch.cat([detector.score(x) for x, _ in ood_loader])
 
-# Combine scores and labels
-all_scores = torch.cat([id_scores, ood_scores])
-all_labels = torch.cat([
-    torch.zeros(len(id_scores)),  # 0 = in-distribution
-    torch.ones(len(ood_scores))   # 1 = OOD
-])
-
-# Evaluate detection performance
-auc = auroc(all_scores, all_labels)
+# Evaluate detection performance — auroc takes the two score tensors directly
+auc = auroc(id_scores, ood_scores)
 print(f"OOD Detection AUROC: {auc:.4f}")
 
 # Use detector with threshold
@@ -400,7 +395,7 @@ The `examples/` directory contains Jupyter notebook tutorials covering all major
 
 ## 🧪 Testing
 
-**incerto** has comprehensive test coverage (**509 tests**, 100% passing):
+**incerto** has comprehensive test coverage (**982 tests**, 100% passing):
 
 ```bash
 # Run all tests

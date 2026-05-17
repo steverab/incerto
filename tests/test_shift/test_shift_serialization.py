@@ -1,21 +1,22 @@
 """Tests for shift detector serialization."""
 
+import os
+import tempfile
+
 import pytest
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-import tempfile
-import os
 
-from incerto.shift import (
-    MMDShiftDetector,
-    EnergyShiftDetector,
-    KSShiftDetector,
-    ClassifierShiftDetector,
-    LabelShiftDetector,
-    ImportanceWeightingShift,
-)
 from incerto.exceptions import SerializationError
+from incerto.shift import (
+    ClassifierShiftDetector,
+    EnergyShiftDetector,
+    ImportanceWeightingShift,
+    KSShiftDetector,
+    LabelShiftDetector,
+    MMDShiftDetector,
+)
 
 
 @pytest.fixture
@@ -451,7 +452,7 @@ class TestSerializationIntegration:
 
             # Save and load multiple times
             path = os.path.join(tmpdir, "detector.pt")
-            for i in range(3):
+            for _ in range(3):
                 detector.save(path)
                 detector = MMDShiftDetector.load(path)
                 score = detector.score(test_loader)

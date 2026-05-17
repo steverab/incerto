@@ -6,14 +6,14 @@ import pytest
 import torch
 
 from incerto.llm import (
-    selective_accuracy,
-    calibration_error,
-    brier_score,
     aur_c,
-    uncertainty_auc,
-    token_level_accuracy,
-    sequence_level_accuracy,
+    brier_score,
+    calibration_error,
     f1_score_tokens,
+    selective_accuracy,
+    sequence_level_accuracy,
+    token_level_accuracy,
+    uncertainty_auc,
 )
 
 

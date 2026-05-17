@@ -6,11 +6,11 @@ import pytest
 import torch
 
 from incerto.llm import (
-    SequenceProbability,
     AverageLogProb,
     NormalizedSequenceProb,
     SequenceEntropy,
     SequencePerplexity,
+    SequenceProbability,
     VarianceOfTokenProbs,
 )
 
@@ -86,12 +86,8 @@ class TestNormalizedSequenceProb:
 
     def test_length_penalty_effect(self, token_logits, token_ids):
         """Test different length penalties produce different results."""
-        prob_0 = NormalizedSequenceProb.compute(
-            token_logits, token_ids, length_penalty=0.0
-        )
-        prob_1 = NormalizedSequenceProb.compute(
-            token_logits, token_ids, length_penalty=1.0
-        )
+        prob_0 = NormalizedSequenceProb.compute(token_logits, token_ids, length_penalty=0.0)
+        prob_1 = NormalizedSequenceProb.compute(token_logits, token_ids, length_penalty=1.0)
 
         # With penalty=0, no length normalization; penalty=1 normalizes by length
         assert not torch.allclose(prob_0, prob_1)
