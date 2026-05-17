@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  test-matrix:
+    name: test (${{ matrix.os }}, ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,6 +43,22 @@ jobs:
     - name: Test import
       run: |
         uv run python -c "import incerto; print('✓ Package imported successfully')"
+
+  # Aggregator job so branch protection can require a single `test` check
+  # instead of every matrix entry. Passes iff every matrix run succeeded.
+  test:
+    name: test
+    if: always()
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check matrix result
+        run: |
+          if [ "${{ needs.test-matrix.result }}" != "success" ]; then
+            echo "::error::One or more matrix test runs failed: ${{ needs.test-matrix.result }}"
+            exit 1
+          fi
+          echo "All matrix test runs succeeded."
 
   coverage:
     runs-on: ubuntu-latest
