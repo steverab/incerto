@@ -5,9 +5,9 @@ Metrics specific to evaluating uncertainty estimates in language models.
 """
 
 from __future__ import annotations
-import torch
+
 import numpy as np
-from typing import List
+import torch
 
 
 def selective_accuracy(
@@ -75,7 +75,7 @@ def calibration_error(
     ece = 0.0
     mce = 0.0
 
-    for i, (bin_lower, bin_upper) in enumerate(zip(bin_lowers, bin_uppers)):
+    for i, (bin_lower, bin_upper) in enumerate(zip(bin_lowers, bin_uppers, strict=False)):
         # Find samples in this bin
         if i == 0:
             in_bin = (confidences >= bin_lower) & (confidences <= bin_upper)
@@ -217,8 +217,8 @@ def token_level_accuracy(
 
 
 def sequence_level_accuracy(
-    pred_sequences: List[str],
-    true_sequences: List[str],
+    pred_sequences: list[str],
+    true_sequences: list[str],
     normalize: bool = True,
 ) -> float:
     """
@@ -236,7 +236,7 @@ def sequence_level_accuracy(
         pred_sequences = [s.lower().strip() for s in pred_sequences]
         true_sequences = [s.lower().strip() for s in true_sequences]
 
-    correct = sum(p == t for p, t in zip(pred_sequences, true_sequences))
+    correct = sum(p == t for p, t in zip(pred_sequences, true_sequences, strict=False))
     return correct / len(pred_sequences)
 
 
@@ -283,11 +283,7 @@ def f1_score_tokens(
 
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = (
-        2 * (precision * recall) / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return {
         "precision": precision,

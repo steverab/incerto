@@ -1,10 +1,11 @@
 """Tests for incerto.conformal.metrics."""
 
 import torch
+
 from incerto.conformal.metrics import (
-    empirical_coverage,
     average_set_size,
     conditional_coverage,
+    empirical_coverage,
 )
 
 

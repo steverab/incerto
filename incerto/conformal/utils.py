@@ -3,13 +3,13 @@ Utility functions for conformal prediction methods.
 """
 
 from __future__ import annotations
+
 import math
+
 import torch
 
 
-def compute_quantile(
-    scores: torch.Tensor, alpha: float, adjusted: bool = True
-) -> float:
+def compute_quantile(scores: torch.Tensor, alpha: float, adjusted: bool = True) -> float:
     """
     Compute the conformal quantile at level (1 - alpha).
 

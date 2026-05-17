@@ -55,9 +55,7 @@ class LabelSmoothingLoss(nn.Module):
 
         # Create smooth labels
         targets_one_hot = F.one_hot(targets, num_classes).float()
-        smooth_targets = (
-            1 - self.smoothing
-        ) * targets_one_hot + self.smoothing / num_classes
+        smooth_targets = (1 - self.smoothing) * targets_one_hot + self.smoothing / num_classes
 
         # Compute loss
         loss = -(smooth_targets * log_probs).sum(dim=-1)
@@ -233,12 +231,10 @@ def evidential_loss(
     S_tilde = alpha_tilde.sum(dim=1, keepdim=True)
 
     # KL[Dir(alpha_tilde) || Dir(1)]
-    first_term = torch.lgamma(S_tilde) - torch.lgamma(alpha_tilde).sum(
+    first_term = torch.lgamma(S_tilde) - torch.lgamma(alpha_tilde).sum(dim=1, keepdim=True)
+    second_term = ((alpha_tilde - 1) * (torch.digamma(alpha_tilde) - torch.digamma(S_tilde))).sum(
         dim=1, keepdim=True
     )
-    second_term = (
-        (alpha_tilde - 1) * (torch.digamma(alpha_tilde) - torch.digamma(S_tilde))
-    ).sum(dim=1, keepdim=True)
     kl_loss = (first_term + second_term).mean()
 
     # Anneal KL coefficient from 0 to kl_weight

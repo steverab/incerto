@@ -12,51 +12,51 @@ from .base import BaseCalibrator
 
 # Post-hoc calibration methods
 from .methods import (
-    IdentityCalibrator,
-    TemperatureScaling,
-    IsotonicRegressionCalibrator,
-    HistogramBinningCalibrator,
-    PlattScalingCalibrator,
-    VectorScaling,
-    MatrixScaling,
-    DirichletCalibrator,
     BetaCalibrator,
-)
-
-# Training-time calibration methods
-from .training import (
-    LabelSmoothingLoss,
-    FocalLoss,
-    ConfidencePenalty,
-    evidential_loss,
-    get_uncertainty_from_evidence,
-    TemperatureAwareTraining,
+    DirichletCalibrator,
+    HistogramBinningCalibrator,
+    IdentityCalibrator,
+    IsotonicRegressionCalibrator,
+    MatrixScaling,
+    PlattScalingCalibrator,
+    TemperatureScaling,
+    VectorScaling,
 )
 
 # Metrics
 from .metrics import (
-    nll,
+    adaptive_ece_score,
     brier_score,
+    classwise_ece,
     ece_score,
     mce_score,
-    classwise_ece,
-    adaptive_ece_score,
+    nll,
     smooth_ece,
 )
 
-# Visualization
-from .visual import (
-    plot_reliability_diagram,
-    plot_confidence_histogram,
-    plot_calibration_curve,
-    plot_smooth_reliability_diagram,
+# Training-time calibration methods
+from .training import (
+    ConfidencePenalty,
+    FocalLoss,
+    LabelSmoothingLoss,
+    TemperatureAwareTraining,
+    evidential_loss,
+    get_uncertainty_from_evidence,
 )
 
 # Utilities
 from .utils import (
-    get_bin_stats,
     extract_confidences_and_predictions,
+    get_bin_stats,
     logits_to_probs,
+)
+
+# Visualization
+from .visual import (
+    plot_calibration_curve,
+    plot_confidence_histogram,
+    plot_reliability_diagram,
+    plot_smooth_reliability_diagram,
 )
 
 __all__ = [

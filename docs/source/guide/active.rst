@@ -1,5 +1,5 @@
 Active Learning Guide
-====================
+=====================
 
 Active learning reduces labeling costs by **strategically selecting which samples to label**. Instead of random sampling, query the most informative examples.
 

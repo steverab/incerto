@@ -10,15 +10,15 @@ Each detector exposes two methods:
 """
 
 from __future__ import annotations
-from typing import Optional
 
 import torch
-from torch.utils.data import DataLoader
 from scipy import stats
+from torch.utils.data import DataLoader
+
 from incerto.core.utils import pairwise_squared_euclidean
 
-from .base import BaseShiftDetector
 from . import metrics
+from .base import BaseShiftDetector
 
 
 # ------------------------------------------------------------------------- #
@@ -94,9 +94,7 @@ class KSShiftDetector(BaseShiftDetector):
         if fitted:
             n_samples = len(self._reference)
             n_features = self._reference.shape[1] if self._reference.dim() > 1 else 1
-            return (
-                f"KSShiftDetector(n_ref_samples={n_samples}, n_features={n_features})"
-            )
+            return f"KSShiftDetector(n_ref_samples={n_samples}, n_features={n_features})"
         return "KSShiftDetector(not fitted)"
 
 
@@ -109,28 +107,55 @@ class ClassifierShiftDetector(BaseShiftDetector):
     * Lipton et al., 2018 (Black Box Shift Detection)
     """
 
-    def __init__(self, clf_factory=None, device: Optional[str] = None) -> None:
+    def __init__(self, clf_factory=None, device: str | None = None) -> None:
         from sklearn.linear_model import LogisticRegression
 
         self.clf = clf_factory() if clf_factory else LogisticRegression(max_iter=1000)
         self.device = device
 
     def _compute(self, test: torch.Tensor) -> float:
-        import numpy as np
-        from sklearn.model_selection import cross_val_predict, StratifiedKFold
+        import warnings
 
-        X_ref = self._reference.cpu().numpy()
+        import numpy as np
+        from sklearn.exceptions import ConvergenceWarning
+        from sklearn.model_selection import StratifiedKFold, cross_val_predict
+
+        X_ref_full = self._reference.cpu().numpy()
         X_test = test.cpu().numpy()
+
+        # Short-circuit: identical reference and test → no shift.
+        if X_ref_full.shape == X_test.shape and np.allclose(X_ref_full, X_test):
+            return 0.0
+
+        # Balance classes by subsampling the reference to match the test size.
+        # Without this the score formula ``|p - 0.5| * 2`` is biased by the
+        # base rate when ``len(ref) >> len(test)``.
+        rng = np.random.default_rng(0)
+        n = min(len(X_ref_full), len(X_test))
+        ref_idx = rng.choice(len(X_ref_full), size=n, replace=False)
+        test_idx = rng.choice(len(X_test), size=n, replace=False)
+        X_ref = X_ref_full[ref_idx]
+        X_test = X_test[test_idx]
+
         X = np.concatenate([X_ref, X_test], axis=0)
         y = np.concatenate([np.zeros(len(X_ref)), np.ones(len(X_test))])
 
-        # Use cross-validation to avoid train/test leakage
+        # Standardize features for numerical stability (silences sklearn
+        # matmul-overflow warnings on un-scaled high-dim inputs).
+        mean = X.mean(axis=0, keepdims=True)
+        std = X.std(axis=0, keepdims=True)
+        std = np.where(std < 1e-12, 1.0, std)
+        X = (X - mean) / std
+
         n_splits = max(2, min(5, len(X_ref), len(X_test)))
         cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=0)
-        proba = cross_val_predict(self.clf, X, y, cv=cv, method="predict_proba")[:, 1]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=ConvergenceWarning)
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            proba = cross_val_predict(self.clf, X, y, cv=cv, method="predict_proba")[:, 1]
 
         test_proba = proba[len(X_ref) :]
-        # Mean output probability should be ~0.5 under no shift
+        # With balanced classes, P(class=test) is 0.5 under no shift.
         return abs(float(test_proba.mean()) - 0.5) * 2
 
     def state_dict(self) -> dict:
@@ -225,9 +250,7 @@ class LabelShiftDetector:
                 for true_label in range(self.num_classes):
                     mask = y == true_label
                     if mask.sum() > 0:
-                        pred_counts = torch.bincount(
-                            preds[mask], minlength=self.num_classes
-                        )
+                        pred_counts = torch.bincount(preds[mask], minlength=self.num_classes)
                         confusion[true_label] += pred_counts.float()
 
         # Normalize rows (C[i,j] = P(pred=j | true=i))
@@ -283,9 +306,7 @@ class LabelShiftDetector:
 
         except Exception:
             # Fallback to least squares if matrix is singular
-            target_dist = torch.linalg.lstsq(
-                self.confusion_matrix.T, pred_dist
-            ).solution
+            target_dist = torch.linalg.lstsq(self.confusion_matrix.T, pred_dist).solution
             target_dist = torch.clamp(target_dist, min=0)
             target_dist = target_dist / target_dist.sum()
 
@@ -316,12 +337,7 @@ class LabelShiftDetector:
         elif metric == "kl":
             # KL divergence
             return (
-                (
-                    target_dist
-                    * torch.log(
-                        (target_dist + 1e-10) / (self.source_label_dist + 1e-10)
-                    )
-                )
+                (target_dist * torch.log((target_dist + 1e-10) / (self.source_label_dist + 1e-10)))
                 .sum()
                 .item()
             )
@@ -342,29 +358,23 @@ class LabelShiftDetector:
 
     def load_state_dict(self, state: dict) -> None:
         """Load label shift detector state."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.num_classes = state["num_classes"]
             self.calibrated = state["calibrated"]
             self.source_label_dist = state["source_label_dist"]
             self.confusion_matrix = state["confusion_matrix"]
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def save(self, path: str) -> None:
         """Save label shift detector state."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("save to {path}"):
             torch.save(self.state_dict(), path)
-        except Exception as e:
-            raise SerializationError(f"Failed to save to {path}: {e}") from e
 
     @classmethod
-    def load(
-        cls, path: str, num_classes: int = 0, calibrated: bool = False
-    ) -> "LabelShiftDetector":
+    def load(cls, path: str, num_classes: int = 0, calibrated: bool = False) -> LabelShiftDetector:
         """Load label shift detector from file.
 
         Args:
@@ -374,9 +384,9 @@ class LabelShiftDetector:
             calibrated: Ignored; restored from saved state. Kept for
                 backward compatibility.
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
             detector = cls(
                 state.get("num_classes", num_classes),
@@ -384,8 +394,6 @@ class LabelShiftDetector:
             )
             detector.load_state_dict(state)
             return detector
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         fitted = self.source_label_dist is not None
@@ -582,47 +590,41 @@ class ImportanceWeightingShift:
     def load_state_dict(self, state: dict) -> None:
         """Load importance weighting state."""
         from .._sklearn_io import deserialize_logistic
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             self.method = state["method"]
             self.alpha = state["alpha"]
             model_data = state["weights_model"]
             if model_data is None:
                 self.weights_model = None
             elif model_data.get("_type") == "tensor":
-                self.weights_model = torch.tensor(
-                    model_data["data"], dtype=torch.float32
-                )
+                self.weights_model = torch.tensor(model_data["data"], dtype=torch.float32)
             else:
                 self.weights_model = deserialize_logistic(model_data)
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def save(self, path: str) -> None:
         """Save importance weighting state."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("save to {path}"):
             torch.save(self.state_dict(), path)
-        except Exception as e:
-            raise SerializationError(f"Failed to save to {path}: {e}") from e
 
     @classmethod
     def load(
         cls, path: str, method: str = "logistic", alpha: float = 0.01
-    ) -> "ImportanceWeightingShift":
+    ) -> ImportanceWeightingShift:
         """Load importance weighting from file."""
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             instance = cls(method, alpha)
             state = torch.load(path, weights_only=True)
             instance.load_state_dict(state)
             return instance
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e
 
     def __repr__(self) -> str:
         fitted = self.weights_model is not None
-        return f"ImportanceWeightingShift(method='{self.method}', alpha={self.alpha}, fitted={fitted})"
+        return (
+            f"ImportanceWeightingShift(method='{self.method}', alpha={self.alpha}, fitted={fitted})"
+        )

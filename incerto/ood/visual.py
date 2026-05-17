@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
-import torch
 import numpy as np
+import torch
 
 
 def plot_roc(id_scores, ood_scores, label=None, ax=None):

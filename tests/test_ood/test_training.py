@@ -9,16 +9,16 @@ Correct API usage:
 - CutMix(alpha=1.0)(x, y) -> (mixed_x, y_a, y_b, lambda)
 """
 
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
 from incerto.ood.training import (
-    mixup_data,
-    mixup_criterion,
-    OutlierExposureLoss,
-    EnergyRegularizedLoss,
     CutMix,
+    EnergyRegularizedLoss,
+    OutlierExposureLoss,
+    mixup_criterion,
+    mixup_data,
 )
 
 
@@ -191,9 +191,7 @@ class TestEnergyRegularizedLoss:
 
         assert torch.allclose(loss_energy, ce_loss, atol=1e-5)
 
-    def test_energy_regularization_effect(
-        self, multiclass_logits, multiclass_labels, num_classes
-    ):
+    def test_energy_regularization_effect(self, multiclass_logits, multiclass_labels, num_classes):
         """Test energy regularization affects loss."""
         # OOD data - same batch size as ID data
         logits_out = torch.randn(len(multiclass_logits), num_classes)

@@ -2,33 +2,34 @@
 Tests for serialization (state_dict, load_state_dict, save, load) across all classes.
 """
 
+import os
+import tempfile
+
 import pytest
 import torch
 import torch.nn as nn
-import tempfile
-import os
 
 from incerto.calibration import (
+    BetaCalibrator,
+    DirichletCalibrator,
+    HistogramBinningCalibrator,
+    IdentityCalibrator,
+    IsotonicRegressionCalibrator,
+    MatrixScaling,
+    PlattScalingCalibrator,
     TemperatureScaling,
     VectorScaling,
-    MatrixScaling,
-    DirichletCalibrator,
-    BetaCalibrator,
-    IsotonicRegressionCalibrator,
-    HistogramBinningCalibrator,
-    PlattScalingCalibrator,
-    IdentityCalibrator,
-)
-from incerto.ood import Energy, ODIN, MSP, MaxLogit
-from incerto.shift import (
-    MMDShiftDetector,
-    EnergyShiftDetector,
-    KSShiftDetector,
-    ClassifierShiftDetector,
-    LabelShiftDetector,
-    ImportanceWeightingShift,
 )
 from incerto.exceptions import SerializationError
+from incerto.ood import MSP, ODIN, Energy, MaxLogit
+from incerto.shift import (
+    ClassifierShiftDetector,
+    EnergyShiftDetector,
+    ImportanceWeightingShift,
+    KSShiftDetector,
+    LabelShiftDetector,
+    MMDShiftDetector,
+)
 
 
 @pytest.fixture
@@ -426,9 +427,7 @@ class TestShiftDetectorSerialization:
         new_detector = LabelShiftDetector(num_classes=10)
         new_detector.load_state_dict(state)
         assert new_detector.num_classes == 10
-        assert torch.allclose(
-            detector.source_label_dist, new_detector.source_label_dist
-        )
+        assert torch.allclose(detector.source_label_dist, new_detector.source_label_dist)
 
     def test_importance_weighting_serialization(self):
         """Test ImportanceWeightingShift save/load."""

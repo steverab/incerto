@@ -6,7 +6,9 @@ allowing selection of the most valuable samples for labeling.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 import torch
 import torch.nn.functional as F
 
@@ -197,9 +199,7 @@ class BALDAcquisition(BaseAcquisition):
                 probs = F.softmax(logits, dim=-1)
                 predictions.append(probs)
 
-            predictions = torch.stack(
-                predictions
-            )  # (num_samples, batch_size, num_classes)
+            predictions = torch.stack(predictions)  # (num_samples, batch_size, num_classes)
 
             # Expected entropy: E_θ[H[y|x,θ]]
             expected_entropy = (
@@ -305,9 +305,7 @@ class MeanSTDAcquisition(BaseAcquisition):
                 probs = F.softmax(logits, dim=-1)
                 predictions.append(probs)
 
-            predictions = torch.stack(
-                predictions
-            )  # (num_samples, batch_size, num_classes)
+            predictions = torch.stack(predictions)  # (num_samples, batch_size, num_classes)
 
             # Compute standard deviation
             std = predictions.std(dim=0)

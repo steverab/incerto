@@ -12,13 +12,14 @@ import pytest
 import torch
 
 from incerto.ood import (
+    KNN,
     MSP,
-    Energy,
     ODIN,
+    Energy,
     Mahalanobis,
     MaxLogit,
-    KNN,
 )
+from incerto.ood.metrics import auroc
 
 
 class TestMSP:
@@ -182,9 +183,7 @@ class TestMahalanobis:
         assert detector.class_means is not None
         assert detector.precision is not None
 
-    def test_score_after_fit(
-        self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs
-    ):
+    def test_score_after_fit(self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs):
         """Test scoring after fitting."""
         detector = Mahalanobis(ood_model, layer_name="penultimate")
 
@@ -273,9 +272,7 @@ class TestKNN:
         # Should store training features
         assert detector.train_features is not None
 
-    def test_score_after_fit(
-        self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs
-    ):
+    def test_score_after_fit(self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs):
         """Test scoring after fitting."""
         detector = KNN(ood_model, k=5, layer_name="penultimate")
 
@@ -361,9 +358,7 @@ class TestOODDetectorIntegration:
         assert torch.isfinite(scores_knn).all()
         assert (scores_knn >= 0).all()  # KNN scores are distances
 
-    def test_id_vs_ood_separation(
-        self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs
-    ):
+    def test_id_vs_ood_separation(self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs):
         """Test that detectors can separate ID from OOD (probabilistically)."""
         # MSP: higher score = more OOD
         detector = MSP(ood_model)
@@ -496,3 +491,90 @@ class TestOODDetectorFileSerialization:
         state = detector.state_dict()
         assert "layer_name" in state
         assert state["layer_name"] == "penultimate"
+
+
+class TestOODDetectionAUROC:
+    """Detector AUROC should clearly exceed 0.5 on near-OOD data.
+
+    Setup: 2-class problem where the discriminative signal is concentrated in
+    ``feature[0]``. OOD data sets ``feature[0]`` to zero (the decision
+    boundary) so that the trained classifier becomes maximally uncertain.
+    """
+
+    @staticmethod
+    def _trained_model_and_data():
+        import torch.nn as nn
+
+        torch.manual_seed(0)
+        n_per_class = 400
+        d = 8
+        # Train: class 0 has feature[0] = -3, class 1 has feature[0] = +3.
+        x0_neg = torch.full((n_per_class, 1), -3.0) + 0.3 * torch.randn(n_per_class, 1)
+        x0_pos = torch.full((n_per_class, 1), 3.0) + 0.3 * torch.randn(n_per_class, 1)
+        rest_neg = torch.randn(n_per_class, d - 1)
+        rest_pos = torch.randn(n_per_class, d - 1)
+        X_train = torch.cat(
+            [torch.cat([x0_neg, rest_neg], dim=1), torch.cat([x0_pos, rest_pos], dim=1)],
+            dim=0,
+        )
+        y_train = torch.cat(
+            [torch.zeros(n_per_class, dtype=torch.long), torch.ones(n_per_class, dtype=torch.long)]
+        )
+
+        model = nn.Sequential(nn.Linear(d, 32), nn.ReLU(), nn.Linear(32, 2))
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        for _ in range(200):
+            optimizer.zero_grad()
+            loss = nn.functional.cross_entropy(model(X_train), y_train)
+            loss.backward()
+            optimizer.step()
+        model.eval()
+
+        # ID test: same distribution as training
+        torch.manual_seed(1)
+        n_test = 200
+        sign = torch.randint(0, 2, (n_test,)) * 2 - 1
+        x0_id = sign.float() * 3.0 + 0.3 * torch.randn(n_test)
+        X_id = torch.cat([x0_id.unsqueeze(1), torch.randn(n_test, d - 1)], dim=1)
+
+        # OOD test: feature[0] at the decision boundary (=0) so logits are flat
+        X_ood = torch.cat([0.0 * torch.randn(n_test, 1), torch.randn(n_test, d - 1)], dim=1)
+
+        train_ds = torch.utils.data.TensorDataset(X_train, y_train)
+        train_loader = torch.utils.data.DataLoader(train_ds, batch_size=64)
+        return model, X_id, X_ood, train_loader
+
+    def test_msp_auroc(self):
+        model, X_id, X_ood, _ = self._trained_model_and_data()
+        detector = MSP(model)
+        with torch.no_grad():
+            id_scores = detector.score(X_id)
+            ood_scores = detector.score(X_ood)
+        a = auroc(id_scores, ood_scores)
+        assert a > 0.7, f"MSP AUROC {a:.3f} should be well above 0.5"
+
+    def test_energy_auroc(self):
+        model, X_id, X_ood, _ = self._trained_model_and_data()
+        detector = Energy(model)
+        with torch.no_grad():
+            id_scores = detector.score(X_id)
+            ood_scores = detector.score(X_ood)
+        a = auroc(id_scores, ood_scores)
+        assert a > 0.7, f"Energy AUROC {a:.3f} should be well above 0.5"
+
+    def test_maxlogit_auroc(self):
+        model, X_id, X_ood, _ = self._trained_model_and_data()
+        detector = MaxLogit(model)
+        with torch.no_grad():
+            id_scores = detector.score(X_id)
+            ood_scores = detector.score(X_ood)
+        a = auroc(id_scores, ood_scores)
+        assert a > 0.7, f"MaxLogit AUROC {a:.3f} should be well above 0.5"
+
+    def test_odin_auroc(self):
+        model, X_id, X_ood, _ = self._trained_model_and_data()
+        detector = ODIN(model, temperature=1000.0, epsilon=0.001)
+        id_scores = detector.score(X_id)
+        ood_scores = detector.score(X_ood)
+        a = auroc(id_scores.detach(), ood_scores.detach())
+        assert a > 0.7, f"ODIN AUROC {a:.3f} should be well above 0.5"

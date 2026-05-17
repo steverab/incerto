@@ -3,19 +3,20 @@ Utility functions for active learning.
 """
 
 from __future__ import annotations
+
 import logging
+
 import torch
-from typing import Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
 
 def split_labeled_unlabeled(
     data: torch.Tensor,
-    labels: Optional[torch.Tensor] = None,
-    labeled_indices: Optional[torch.Tensor] = None,
-    unlabeled_indices: Optional[torch.Tensor] = None,
-) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
+    labels: torch.Tensor | None = None,
+    labeled_indices: torch.Tensor | None = None,
+    unlabeled_indices: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
     """
     Split data into labeled and unlabeled sets.
 
@@ -121,7 +122,7 @@ def compute_diversity_penalty(
 def greedy_k_center(
     features: torch.Tensor,
     k: int,
-    initial_centers: Optional[torch.Tensor] = None,
+    initial_centers: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     Greedy k-center algorithm for diverse sample selection.
@@ -171,8 +172,8 @@ def greedy_k_center(
 def subsample_for_efficiency(
     data: torch.Tensor,
     max_samples: int = 10000,
-    random_seed: Optional[int] = None,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    random_seed: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Subsample data for computational efficiency.
 
@@ -203,9 +204,9 @@ def active_learning_loop(
     strategy,
     num_rounds: int = 10,
     initial_labeled: int = 100,
-    train_fn: Optional[callable] = None,
-    eval_fn: Optional[callable] = None,
-    random_seed: Optional[int] = None,
+    train_fn: callable | None = None,
+    eval_fn: callable | None = None,
+    random_seed: int | None = None,
 ) -> dict:
     """
     Run a full active learning loop.

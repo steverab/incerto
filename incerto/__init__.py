@@ -15,29 +15,19 @@ Submodules:
 __version__ = "0.1.0"
 
 # Core utilities
+# Submodules - import them so users can do `from incerto import calibration`
+from . import active, bayesian, calibration, conformal, data, llm, ood, shift, sp, utils
 from .core import entropy
 
 # Exceptions
 from .exceptions import (
-    IncertoError,
-    NotFittedError,
     CalibrationError,
-    SerializationError,
     ConfigurationError,
     DataError,
+    IncertoError,
+    NotFittedError,
+    SerializationError,
 )
-
-# Submodules - import them so users can do `from incerto import calibration`
-from . import calibration
-from . import conformal
-from . import llm
-from . import ood
-from . import shift
-from . import sp
-from . import bayesian
-from . import active
-from . import data
-from . import utils
 
 __all__ = [
     "__version__",

@@ -5,22 +5,23 @@ Provides standardized data loaders and sampling strategies.
 """
 
 from __future__ import annotations
+
+import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
-from typing import Optional, Tuple
-import numpy as np
+
 from .utils import _get_targets
 
 
 def create_dataloaders(
     train_dataset: Dataset,
-    val_dataset: Optional[Dataset] = None,
-    test_dataset: Optional[Dataset] = None,
+    val_dataset: Dataset | None = None,
+    test_dataset: Dataset | None = None,
     batch_size: int = 128,
     num_workers: int = 4,
     pin_memory: bool = True,
     shuffle_train: bool = True,
-) -> Tuple[DataLoader, ...]:
+) -> tuple[DataLoader, ...]:
     """
     Create standard data loaders for train/val/test.
 
@@ -92,7 +93,7 @@ def create_balanced_dataloader(
 
     # Compute class weights (use np.unique to avoid division by zero with non-contiguous classes)
     unique_classes, class_counts = np.unique(targets, return_counts=True)
-    class_weight_map = dict(zip(unique_classes, 1.0 / class_counts))
+    class_weight_map = dict(zip(unique_classes, 1.0 / class_counts, strict=False))
     sample_weights = np.array([class_weight_map[t] for t in targets])
 
     # Create sampler
@@ -122,7 +123,7 @@ def create_ood_dataloader(
     pin_memory: bool = True,
     mixed: bool = False,
     mix_ratio: float = 0.5,
-) -> Tuple[DataLoader, DataLoader] | DataLoader:
+) -> tuple[DataLoader, DataLoader] | DataLoader:
     """
     Create data loaders for OOD detection evaluation.
 
@@ -234,7 +235,7 @@ def create_calibration_loaders(
     num_workers: int = 4,
     pin_memory: bool = True,
     seed: int = 42,
-) -> Tuple[DataLoader, DataLoader, DataLoader]:
+) -> tuple[DataLoader, DataLoader, DataLoader]:
     """
     Create loaders for calibration experiments.
 
@@ -323,7 +324,7 @@ def get_dataloader_stats(dataloader: DataLoader) -> dict:
         targets = _get_targets(dataloader.dataset)
         unique, counts = np.unique(targets, return_counts=True)
         stats["num_classes"] = len(unique)
-        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist()))
+        stats["class_distribution"] = dict(zip(unique.tolist(), counts.tolist(), strict=False))
     except ValueError:
         pass  # Dataset has no targets/labels attribute
 

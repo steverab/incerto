@@ -12,33 +12,33 @@ Submodules:
 
 # Acquisition functions
 from .acquisition import (
+    BALDAcquisition,
     BaseAcquisition,
-    RandomAcquisition,
+    BatchBALDAcquisition,
     EntropyAcquisition,
     LeastConfidenceAcquisition,
     MarginAcquisition,
-    BALDAcquisition,
-    VarianceRatioAcquisition,
     MeanSTDAcquisition,
-    BatchBALDAcquisition,
+    RandomAcquisition,
+    VarianceRatioAcquisition,
 )
 
 # Query strategies
 from .strategies import (
-    UncertaintySampling,
-    DiversitySampling,
-    CoreSetSelection,
     BadgeSampling,
+    CoreSetSelection,
+    DiversitySampling,
     QueryByCommittee,
+    UncertaintySampling,
 )
 
 # Utilities
 from .utils import (
-    split_labeled_unlabeled,
+    active_learning_loop,
     compute_diversity_penalty,
     greedy_k_center,
+    split_labeled_unlabeled,
     subsample_for_efficiency,
-    active_learning_loop,
 )
 
 __all__ = [

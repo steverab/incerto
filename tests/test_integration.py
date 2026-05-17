@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -162,9 +161,7 @@ class TestShiftIntegration:
 
         ref_loader = DataLoader(TensorDataset(ref, torch.zeros(200)), batch_size=64)
         same_loader = DataLoader(TensorDataset(same, torch.zeros(200)), batch_size=64)
-        shifted_loader = DataLoader(
-            TensorDataset(shifted, torch.zeros(200)), batch_size=64
-        )
+        shifted_loader = DataLoader(TensorDataset(shifted, torch.zeros(200)), batch_size=64)
 
         detector = MMDShiftDetector(sigma=1.0)
         detector.fit(ref_loader)
@@ -184,9 +181,7 @@ class TestShiftIntegration:
 
         ref_loader = DataLoader(TensorDataset(ref, torch.zeros(200)), batch_size=64)
         same_loader = DataLoader(TensorDataset(same, torch.zeros(200)), batch_size=64)
-        shifted_loader = DataLoader(
-            TensorDataset(shifted, torch.zeros(200)), batch_size=64
-        )
+        shifted_loader = DataLoader(TensorDataset(shifted, torch.zeros(200)), batch_size=64)
 
         detector = KSShiftDetector()
         detector.fit(ref_loader)
@@ -343,18 +338,6 @@ class TestEnsembleStatistics:
         assert samples.shape == (3, 8, 5)
         assert torch.allclose(samples.mean(dim=0), mean, atol=1e-6)
 
-    def test_return_all_backward_compat(self, set_seed):
-        """return_all should still work as deprecated alias."""
-        from incerto.bayesian import DeepEnsemble
-
-        ensemble = DeepEnsemble(
-            lambda: SimpleClassifier(in_features=10, num_classes=5), num_models=3
-        )
-        x = torch.randn(8, 10)
-
-        mean, var, samples = ensemble.predict(x, return_all=True)
-        assert samples.shape == (3, 8, 5)
-
 
 class TestSWAGStatistics:
     """Verify SWAG produces statistically valid outputs."""
@@ -434,9 +417,7 @@ class TestStrengthenedCalibration:
 class TestStrengthenedOOD:
     """OOD tests verifying ID scores < OOD scores."""
 
-    def test_knn_id_closer_than_ood(
-        self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs
-    ):
+    def test_knn_id_closer_than_ood(self, ood_model, ood_id_loader, ood_id_inputs, ood_ood_inputs):
         """KNN distances should be smaller for ID than OOD data."""
         from incerto.ood import KNN
 

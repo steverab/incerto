@@ -6,6 +6,7 @@ temperature scaling for token distributions and sequence-level calibration.
 """
 
 from __future__ import annotations
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -140,13 +141,9 @@ class VerbosityBiasCorrection:
 
         for i in range(len(self.bin_edges) - 1):
             if i < len(self.bin_edges) - 2:
-                mask = (length_array >= self.bin_edges[i]) & (
-                    length_array < self.bin_edges[i + 1]
-                )
+                mask = (length_array >= self.bin_edges[i]) & (length_array < self.bin_edges[i + 1])
             else:
-                mask = (length_array >= self.bin_edges[i]) & (
-                    length_array <= self.bin_edges[i + 1]
-                )
+                mask = (length_array >= self.bin_edges[i]) & (length_array <= self.bin_edges[i + 1])
             if mask.sum() > 0:
                 self.bin_mean_confidences.append(conf_array[mask].mean())
             else:

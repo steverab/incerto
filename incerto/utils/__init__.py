@@ -8,14 +8,14 @@ This module provides:
 - Logging configuration
 """
 
-from .models import ConvNet, ResNet18, MLP, BasicBlock
-from .training import train_epoch, evaluate, seed_everything, EarlyStopping
+from .logging import disable_logging, get_logger, setup_logging
+from .models import MLP, BasicBlock, ConvNet, ResNet18
+from .training import EarlyStopping, evaluate, seed_everything, train_epoch
 from .visualization import (
+    plot_2d_classification,
     plot_training_curves,
     plot_uncertainty_distribution,
-    plot_2d_classification,
 )
-from .logging import get_logger, setup_logging, disable_logging
 
 __all__ = [
     # Models

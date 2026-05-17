@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from incerto.core import entropy, predictive_entropy, pairwise_squared_euclidean
+from incerto.core import entropy, pairwise_squared_euclidean, predictive_entropy
 
 
 class TestEntropy:

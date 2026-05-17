@@ -6,8 +6,8 @@ beam search, nucleus sampling, etc.
 """
 
 from __future__ import annotations
+
 import torch
-from typing import List
 
 
 class BeamSearchUncertainty:
@@ -58,7 +58,7 @@ class BeamSearchUncertainty:
 
     @staticmethod
     def diversity_among_beams(
-        beam_sequences: List[List[int]],
+        beam_sequences: list[list[int]],
     ) -> float:
         """
         Measure diversity among beam search outputs.
@@ -176,9 +176,7 @@ class IDontKnowDetection:
             True if uncertainty phrase detected
         """
         text_lower = text.lower()
-        return any(
-            phrase in text_lower for phrase in IDontKnowDetection.UNCERTAINTY_PHRASES
-        )
+        return any(phrase in text_lower for phrase in IDontKnowDetection.UNCERTAINTY_PHRASES)
 
     @staticmethod
     def extract_confidence_from_hedging(text: str) -> dict:

@@ -8,10 +8,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from incerto.bayesian import (
-    MCDropout,
-    DeepEnsemble,
     SWAG,
+    DeepEnsemble,
     LaplaceApproximation,
+    MCDropout,
     VariationalBayesNN,
 )
 
@@ -94,9 +94,7 @@ class TestMCDropout:
         mi = mc_model.predict_mutual_information(x[:10])
 
         assert mi.shape == (10,)
-        assert torch.all(
-            mi >= -1e-5
-        )  # Should be non-negative (allow small numerical errors)
+        assert torch.all(mi >= -1e-5)  # Should be non-negative (allow small numerical errors)
 
 
 class TestDeepEnsemble:
@@ -163,7 +161,7 @@ class TestDeepEnsemble:
 
         ensemble = DeepEnsemble(create_model, num_models=5)
 
-        mean, variance, all_preds = ensemble.predict(x[:10], return_all=True)
+        mean, variance, all_preds = ensemble.predict(x[:10], return_samples=True)
 
         assert all_preds.shape == (5, 10, 3)
         assert torch.allclose(all_preds.mean(dim=0), mean, atol=1e-6)
@@ -251,15 +249,13 @@ class TestLaplaceApproximation:
 
     def test_fit_and_predict(self, simple_model, simple_data):
         """Happy-path: fit on training data, then predict."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)
         loader = DataLoader(dataset, batch_size=32)
 
-        laplace = LaplaceApproximation(
-            simple_model, likelihood="classification", num_samples=5
-        )
+        laplace = LaplaceApproximation(simple_model, likelihood="classification", num_samples=5)
         laplace.fit(loader, device="cpu")
 
         # Posterior should be populated after fit
@@ -277,15 +273,13 @@ class TestLaplaceApproximation:
 
     def test_fit_and_predict_with_samples(self, simple_model, simple_data):
         """Test return_samples=True returns three tensors."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)
         loader = DataLoader(dataset, batch_size=32)
 
-        laplace = LaplaceApproximation(
-            simple_model, likelihood="classification", num_samples=5
-        )
+        laplace = LaplaceApproximation(simple_model, likelihood="classification", num_samples=5)
         laplace.fit(loader, device="cpu")
 
         x_test = x[:10]
@@ -298,21 +292,17 @@ class TestLaplaceApproximation:
 
     def test_fit_restores_original_params(self, simple_model, simple_data):
         """Test that predict restores model weights after sampling."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)
         loader = DataLoader(dataset, batch_size=32)
 
-        laplace = LaplaceApproximation(
-            simple_model, likelihood="classification", num_samples=3
-        )
+        laplace = LaplaceApproximation(simple_model, likelihood="classification", num_samples=3)
         laplace.fit(loader, device="cpu")
 
         # Get original weights
-        original_weights = {
-            n: p.data.clone() for n, p in simple_model.named_parameters()
-        }
+        original_weights = {n: p.data.clone() for n, p in simple_model.named_parameters()}
 
         # Predict (internally samples different weights)
         laplace.predict(x[:5])
@@ -441,7 +431,7 @@ class TestLaplaceApproximationSerialization:
 
     def test_state_dict_contains_laplace_state(self, simple_model, simple_data):
         """Test that state_dict includes Laplace-specific state."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)
@@ -459,7 +449,7 @@ class TestLaplaceApproximationSerialization:
 
     def test_load_state_dict_restores_laplace_state(self, simple_model, simple_data):
         """Test that load_state_dict restores Laplace state."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)
@@ -484,7 +474,7 @@ class TestLaplaceApproximationSerialization:
 
     def test_serialization_roundtrip(self, simple_model, simple_data, tmp_path):
         """Test full save/load cycle."""
-        from torch.utils.data import TensorDataset, DataLoader
+        from torch.utils.data import DataLoader, TensorDataset
 
         x, y = simple_data
         dataset = TensorDataset(x, y)

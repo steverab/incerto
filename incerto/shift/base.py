@@ -6,7 +6,9 @@ the _compute() method for their specific test statistic.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -46,7 +48,7 @@ class BaseShiftDetector(ABC):
         - KSTest: Kolmogorov-Smirnov test for 1D features
     """
 
-    def fit(self, reference_loader: DataLoader) -> "BaseShiftDetector":
+    def fit(self, reference_loader: DataLoader) -> BaseShiftDetector:
         """
         Fit the detector on reference (source) distribution.
 
@@ -98,9 +100,7 @@ class BaseShiftDetector(ABC):
         if not hasattr(self, "_reference"):
             from ..exceptions import NotFittedError
 
-            raise NotFittedError(
-                "Detector has not been fitted. Call fit() before score()."
-            )
+            raise NotFittedError("Detector has not been fitted. Call fit() before score().")
 
         test_batch = torch.cat([x[0].detach() for x in test_loader])
         # Ensure at least 2D (n, d)
@@ -152,13 +152,11 @@ class BaseShiftDetector(ABC):
         Raises:
             SerializationError: If state is invalid.
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load state"):
             if "_reference" in state:
                 self._reference = state["_reference"]
-        except Exception as e:
-            raise SerializationError(f"Failed to load state: {e}") from e
 
     def save(self, path: str) -> None:
         """
@@ -174,15 +172,13 @@ class BaseShiftDetector(ABC):
             >>> detector.fit(reference_loader)
             >>> detector.save('detector_state.pt')
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("save to {path}"):
             torch.save(self.state_dict(), path)
-        except Exception as e:
-            raise SerializationError(f"Failed to save to {path}: {e}") from e
 
     @classmethod
-    def load(cls, path: str) -> "BaseShiftDetector":
+    def load(cls, path: str) -> BaseShiftDetector:
         """
         Load a detector from a file.
 
@@ -199,12 +195,10 @@ class BaseShiftDetector(ABC):
             >>> detector = MyShiftDetector.load('detector_state.pt')
             >>> shift_score = detector.score(test_loader)
         """
-        from ..exceptions import SerializationError
+        from ..exceptions import serialization_errors
 
-        try:
+        with serialization_errors("load from {path}"):
             state = torch.load(path, weights_only=True)
             instance = cls()
             instance.load_state_dict(state)
             return instance
-        except Exception as e:
-            raise SerializationError(f"Failed to load from {path}: {e}") from e

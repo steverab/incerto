@@ -9,8 +9,10 @@ optimisers, schedulers, or training loops are defined here.
 """
 
 from __future__ import annotations
-from typing import Callable, Tuple, List, Union
+
 import math
+from collections.abc import Callable
+
 import torch
 
 
@@ -61,9 +63,7 @@ class ConformalPredictor:
         self.method = method
         self.alpha = alpha
 
-    def predict(
-        self, x: torch.Tensor
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+    def predict(self, x: torch.Tensor) -> list[torch.Tensor] | tuple[torch.Tensor, torch.Tensor]:
         """Run the calibrated predictor on new inputs.
 
         For classification: returns ``List[torch.Tensor]`` of prediction sets.
@@ -71,16 +71,14 @@ class ConformalPredictor:
         """
         return self._predictor(x)
 
-    def __call__(
-        self, x: torch.Tensor
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+    def __call__(self, x: torch.Tensor) -> list[torch.Tensor] | tuple[torch.Tensor, torch.Tensor]:
         return self.predict(x)
 
     def __repr__(self) -> str:
         return f"ConformalPredictor(method='{self.method}', alpha={self.alpha})"
 
     @classmethod
-    def from_method(cls, method: str, **kwargs) -> "ConformalPredictor":
+    def from_method(cls, method: str, **kwargs) -> ConformalPredictor:
         """Convenience factory that calls the named method and wraps the result.
 
         Args:
@@ -113,7 +111,7 @@ def inductive_conformal(
     model: torch.nn.Module,
     calib_loader: torch.utils.data.DataLoader,
     alpha: float,
-) -> Callable[[torch.Tensor], List[torch.Tensor]]:
+) -> Callable[[torch.Tensor], list[torch.Tensor]]:
     """
     Classical Inductive Conformal Prediction (ICP)
     — Vovk, Gammerman, and Shafer, *Algorithmic Learning in a Random World* (2005).
@@ -131,7 +129,7 @@ def inductive_conformal(
     all_scores = torch.cat(scores)
     qhat = _conformal_quantile(all_scores, alpha)
 
-    def predictor(x: torch.Tensor) -> List[torch.Tensor]:
+    def predictor(x: torch.Tensor) -> list[torch.Tensor]:
         model.eval()
         with torch.no_grad():
             logits = model(x)
@@ -147,7 +145,7 @@ def mondrian_conformal(
     calib_loader: torch.utils.data.DataLoader,
     alpha: float,
     partition_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None = None,
-) -> Callable[[torch.Tensor], List[torch.Tensor]]:
+) -> Callable[[torch.Tensor], list[torch.Tensor]]:
     """
     Mondrian Conformal Prediction
     — Papadopoulos, *Reliable Classification with Conformal Predictors* (2008).
@@ -166,7 +164,7 @@ def mondrian_conformal(
         logits = model(x)
         conf = torch.softmax(logits, dim=-1)
         part = partition_fn(x, y)
-        for p, c, yy in zip(part, conf, y):
+        for p, c, yy in zip(part, conf, y, strict=False):
             scores = parts.setdefault(int(p), [])
             scores.append(1.0 - c[yy])
     qhats = {k: _conformal_quantile(torch.tensor(v), alpha) for k, v in parts.items()}
@@ -175,7 +173,7 @@ def mondrian_conformal(
     # qhat=1.0 means threshold 1−1=0, so every class is included.
     _default_qhat = torch.tensor(1.0)
 
-    def predictor(x: torch.Tensor) -> List[torch.Tensor]:
+    def predictor(x: torch.Tensor) -> list[torch.Tensor]:
         model.eval()
         with torch.no_grad():
             logits = model(x)
@@ -183,7 +181,7 @@ def mondrian_conformal(
             part = partition_fn(x, logits.argmax(-1))
             return [
                 (ci >= 1.0 - qhats.get(int(pi), _default_qhat)).nonzero().squeeze(-1)
-                for ci, pi in zip(conf, part)
+                for ci, pi in zip(conf, part, strict=False)
             ]
 
     return predictor
@@ -194,7 +192,7 @@ def aps(
     model: torch.nn.Module,
     calib_loader: torch.utils.data.DataLoader,
     alpha: float,
-) -> Callable[[torch.Tensor], List[torch.Tensor]]:
+) -> Callable[[torch.Tensor], list[torch.Tensor]]:
     """
     Adaptive Prediction Sets (APS)
     — Romano, Patterson, and Candes, *NeurIPS 2020*.
@@ -226,13 +224,11 @@ def aps(
     all_scores = torch.cat(scores)
     qhat = _conformal_quantile(all_scores, alpha)
 
-    def predictor(x: torch.Tensor) -> List[torch.Tensor]:
+    def predictor(x: torch.Tensor) -> list[torch.Tensor]:
         model.eval()
         with torch.no_grad():
             logits = model(x)
-            probs, idx = torch.sort(
-                torch.softmax(logits, dim=-1), descending=True, dim=-1
-            )
+            probs, idx = torch.sort(torch.softmax(logits, dim=-1), descending=True, dim=-1)
             cumprobs = probs.cumsum(dim=-1)
             # Randomised inclusion matching the calibration score
             V = torch.rand(x.size(0), 1, device=probs.device)
@@ -240,7 +236,7 @@ def aps(
             cumprobs_prev[:, 1:] = cumprobs[:, :-1]
             randomized = cumprobs_prev + V * probs
             sets = []
-            for idx_i, rand_i in zip(idx, randomized):
+            for idx_i, rand_i in zip(idx, randomized, strict=False):
                 sets.append(idx_i[rand_i <= qhat])
             return sets
 
@@ -254,12 +250,11 @@ def raps(
     alpha: float,
     lam: float = 0.0,
     k_reg: int = 1,
-) -> Callable[[torch.Tensor], List[torch.Tensor]]:
-    """
-    Regularized APS (RAPS)
-    — Angelopoulos, Bates, Malik, and Jordan, *ICLR 2021*.
+) -> Callable[[torch.Tensor], list[torch.Tensor]]:
+    """Regularized APS (RAPS), Angelopoulos, Bates, Malik, and Jordan (ICLR 2021).
 
-    Adds ℓ₁ regularisation (λ) beyond rank k_reg and minimum size constraint to APS.
+    Adds an L1-style penalty (``lam``) beyond rank ``k_reg`` plus a minimum
+    set-size constraint, on top of APS.
     """
     _validate_alpha(alpha)
     model.eval()
@@ -276,7 +271,7 @@ def raps(
     all_scores = torch.cat(scores)
     qhat = _conformal_quantile(all_scores, alpha)
 
-    def predictor(x: torch.Tensor) -> List[torch.Tensor]:
+    def predictor(x: torch.Tensor) -> list[torch.Tensor]:
         model.eval()
         with torch.no_grad():
             logits = model(x)
@@ -288,7 +283,7 @@ def raps(
             # enforce minimum size k_reg
             mask_min = torch.arange(probs.size(-1), device=probs.device)[None] < k_reg
             S = S | mask_min
-            return [(idx_i[S_i == 1]).clone().detach() for idx_i, S_i in zip(idx, S)]
+            return [(idx_i[S_i == 1]).clone().detach() for idx_i, S_i in zip(idx, S, strict=False)]
 
     return predictor
 
@@ -300,10 +295,10 @@ def jackknife_plus(
     model_fn: Callable[[torch.utils.data.Dataset], torch.nn.Module],
     train_dataset: torch.utils.data.Dataset,
     alpha: float,
-) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
     """
     Jackknife+ Intervals
-    — Barber, Candès, and Ramdas, *Ann. Stat.* 2021.
+    Barber, Candès, and Ramdas (Ann. Stat. 2021).
 
     Produces prediction intervals using leave-one-out cross-validation with
     the Jackknife+ aggregation rule.  All n LOO models are retained and used
@@ -316,13 +311,11 @@ def jackknife_plus(
     """
     _validate_alpha(alpha)
     n = len(train_dataset)
-    loo_models: List[torch.nn.Module] = []
+    loo_models: list[torch.nn.Module] = []
     residuals = torch.empty(n)
 
     for i in range(n):
-        leave_one_out = torch.utils.data.Subset(
-            train_dataset, [j for j in range(n) if j != i]
-        )
+        leave_one_out = torch.utils.data.Subset(train_dataset, [j for j in range(n) if j != i])
         model = model_fn(leave_one_out)
         model.eval()
         loo_models.append(model)
@@ -331,7 +324,7 @@ def jackknife_plus(
             pred = model(xi.unsqueeze(0)).squeeze().cpu()
         residuals[i] = torch.abs(pred - yi)
 
-    def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predictor(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         loo_preds = []
         for i in range(n):
             loo_models[i].eval()
@@ -374,10 +367,10 @@ def cv_plus(
     train_dataset: torch.utils.data.Dataset,
     folds: int,
     alpha: float,
-) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
     """
     Cross-Validation+ Intervals (CV+)
-    — Barber et al., *Ann. Stat.* 2021.
+    Barber et al. (Ann. Stat. 2021).
 
     Uses k-fold cross-validation to produce prediction intervals.  All K
     fold models are retained and used at prediction time via the CV+
@@ -394,7 +387,7 @@ def cv_plus(
     idx = torch.randperm(n)
     fold_sizes = [(n + i) // folds for i in range(folds)]
 
-    fold_models: List[torch.nn.Module] = []
+    fold_models: list[torch.nn.Module] = []
     residuals = torch.empty(n)
     sample_to_fold = torch.empty(n, dtype=torch.long)
 
@@ -419,7 +412,7 @@ def cv_plus(
             residuals[vi] = fold_residuals[j]
             sample_to_fold[vi] = k
 
-    def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predictor(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         fold_preds = []
         for k in range(folds):
             fold_models[k].eval()
@@ -463,10 +456,10 @@ def conformalized_quantile_regression(
     quantile_model: torch.nn.Module,
     calib_loader: torch.utils.data.DataLoader,
     alpha: float,
-) -> Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
     """
     Conformalized Quantile Regression (CQR)
-    — Romano, Patterson, and Candes, *NeurIPS 2019*.
+    Romano, Patterson, and Candes (NeurIPS 2019).
 
     Combines quantile regression with split conformal prediction to produce
     adaptive prediction intervals with finite-sample coverage guarantees.
@@ -527,7 +520,7 @@ def conformalized_quantile_regression(
     all_scores = torch.cat(scores)
     qhat = _conformal_quantile(all_scores, alpha)
 
-    def predictor(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predictor(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         quantile_model.eval()
         with torch.no_grad():
             preds = quantile_model(x)

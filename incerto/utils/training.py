@@ -4,10 +4,11 @@ Training utilities for examples.
 Common training loops and helpers to reduce boilerplate in examples.
 """
 
+import random
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import random
 from tqdm import tqdm
 
 
@@ -70,9 +71,7 @@ def train_epoch(
         correct += predicted.eq(targets).sum().item()
 
         # Update progress bar
-        pbar.set_postfix(
-            {"loss": f"{loss.item():.4f}", "acc": f"{100.*correct/total:.2f}%"}
-        )
+        pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc": f"{100.*correct/total:.2f}%"})
 
     return {
         "loss": total_loss / len(train_loader),
@@ -123,9 +122,7 @@ def evaluate(
             all_logits.append(outputs.cpu())
             all_targets.append(targets.cpu())
 
-            pbar.set_postfix(
-                {"loss": f"{loss.item():.4f}", "acc": f"{100.*correct/total:.2f}%"}
-            )
+            pbar.set_postfix({"loss": f"{loss.item():.4f}", "acc": f"{100.*correct/total:.2f}%"})
 
     all_logits = torch.cat(all_logits)
     all_targets = torch.cat(all_targets)

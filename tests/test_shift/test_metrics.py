@@ -1,14 +1,14 @@
 """Tests for shift detection metrics."""
 
-import torch
 import numpy as np
+import torch
 
 from incerto.shift.metrics import (
     energy_distance,
-    total_variation,
     population_stability_index,
-    wasserstein_distance,
     sliced_wasserstein_distance,
+    total_variation,
+    wasserstein_distance,
 )
 
 
@@ -419,9 +419,7 @@ class TestMetricComparisons:
 
         energy_dist = energy_distance(x, y)
         wass_dist = wasserstein_distance(x, y, p=2.0, max_iter=100)
-        sliced_wass_dist = sliced_wasserstein_distance(
-            x, y, num_projections=50, seed=42
-        )
+        sliced_wass_dist = sliced_wasserstein_distance(x, y, num_projections=50, seed=42)
 
         # Energy distance and sliced Wasserstein should clearly detect the shift
         assert energy_dist > 1.0
@@ -443,9 +441,7 @@ class TestMetricComparisons:
         wass_no = wasserstein_distance(x, y, p=2.0, max_iter=50)
         wass_shift = wasserstein_distance(x, y_shifted, p=2.0, max_iter=50)
         sliced_no = sliced_wasserstein_distance(x, y, num_projections=50, seed=42)
-        sliced_shift = sliced_wasserstein_distance(
-            x, y_shifted, num_projections=50, seed=42
-        )
+        sliced_shift = sliced_wasserstein_distance(x, y_shifted, num_projections=50, seed=42)
 
         # No-shift should be smaller than shifted
         assert energy_no < energy_shift

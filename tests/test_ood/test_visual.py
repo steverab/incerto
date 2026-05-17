@@ -2,8 +2,8 @@
 Tests for OOD detection visualization functions.
 """
 
-import torch
 import matplotlib
+import torch
 
 matplotlib.use("Agg")  # Non-interactive backend for tests
 import matplotlib.pyplot as plt

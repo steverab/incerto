@@ -2,15 +2,15 @@
 Tests for OOD detection utilities.
 """
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 
 from incerto.ood.utils import (
     compute_threshold_at_tpr,
-    get_ood_predictions,
     extract_features,
+    get_ood_predictions,
 )
 
 

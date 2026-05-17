@@ -6,18 +6,19 @@ uncertainty quantification research.
 """
 
 from __future__ import annotations
+
 import torch
 from torch.utils.data import Dataset, Subset
 
 try:
     from torchvision import datasets, transforms
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "torchvision is required for incerto.data.vision. "
         "Install it with: pip install incerto[vision]"
-    )
-from typing import Tuple
+    ) from err
 from pathlib import Path
+
 from .utils import TransformDataset
 
 
@@ -47,7 +48,7 @@ class VisionDataset:
         self.val_split = val_split
         self.seed = seed
 
-    def _split_train_val(self, train_dataset: Dataset) -> Tuple[Subset, Subset]:
+    def _split_train_val(self, train_dataset: Dataset) -> tuple[Subset, Subset]:
         """Split training dataset into train/val."""
         n_train = len(train_dataset)
         n_val = int(n_train * self.val_split)
@@ -94,7 +95,7 @@ class MNIST(VisionDataset):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset, Dataset]:
         """
         Get train, validation, and test datasets.
 
@@ -155,7 +156,7 @@ class FashionMNIST(VisionDataset):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset, Dataset]:
         """Get train, validation, and test datasets."""
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
@@ -227,7 +228,7 @@ class CIFAR10(VisionDataset):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset, Dataset]:
         """Get train, validation, and test datasets."""
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
@@ -299,7 +300,7 @@ class CIFAR100(VisionDataset):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset, Dataset]:
         """Get train, validation, and test datasets."""
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)
@@ -359,7 +360,7 @@ class SVHN(VisionDataset):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset, Dataset]:
         """Get train, validation, and test datasets."""
         train_transform = self.get_transforms(train=True)
         test_transform = self.get_transforms(train=False)

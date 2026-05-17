@@ -8,8 +8,8 @@ Notation:
 """
 
 from __future__ import annotations
+
 import torch
-from typing import Tuple
 
 
 # ----------------------------------------------------------------------
@@ -48,7 +48,7 @@ def accuracy_coverage_curve(
     logits: torch.Tensor,
     y: torch.Tensor,
     confidence: torch.Tensor | None = None,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Return `(coverage, accuracy)` curve for each possible threshold.
     """

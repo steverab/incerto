@@ -6,8 +6,8 @@ to abstain from making predictions when uncertain, trading coverage for accuracy
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -57,12 +57,12 @@ class BaseSelectivePredictor(nn.Module, ABC):
         x: torch.Tensor,
         *,
         return_confidence: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
         """
         Forward pass with optional confidence scores.
 
         Args:
-            x: Input tensor of shape (batch_size, *input_dims)
+            x: Input tensor of shape ``(batch_size, ...)``
             return_confidence: If True, return (logits, confidence) tuple.
                              If False, return only logits.
 
@@ -88,7 +88,7 @@ class BaseSelectivePredictor(nn.Module, ABC):
         This is the core method that subclasses must implement.
 
         Args:
-            x: Input tensor of shape (batch_size, *input_dims)
+            x: Input tensor of shape ``(batch_size, ...)``
 
         Returns:
             Logits tensor of shape (batch_size, num_classes)

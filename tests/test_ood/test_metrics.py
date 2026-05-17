@@ -5,7 +5,7 @@ Tests for OOD detection metrics.
 import pytest
 import torch
 
-from incerto.ood.metrics import auroc, fpr_at_tpr, detection_accuracy
+from incerto.ood.metrics import auroc, detection_accuracy, fpr_at_tpr
 
 
 class TestAUROC:

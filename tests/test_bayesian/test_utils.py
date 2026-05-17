@@ -5,13 +5,13 @@ Tests for Bayesian utility functions.
 import torch
 
 from incerto.bayesian.utils import (
-    predictive_entropy,
-    mutual_information,
-    expected_calibration_error,
-    decompose_uncertainty,
     compute_disagreement,
-    sample_from_posterior,
+    decompose_uncertainty,
     ensemble_predictions_to_distribution,
+    expected_calibration_error,
+    mutual_information,
+    predictive_entropy,
+    sample_from_posterior,
 )
 
 

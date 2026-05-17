@@ -6,9 +6,10 @@ acquisition functions with diversity and batch considerations.
 """
 
 from __future__ import annotations
-from typing import List, Optional
+
 import torch
 import torch.nn.functional as F
+
 from .acquisition import BaseAcquisition
 
 
@@ -89,7 +90,7 @@ class DiversitySampling:
         self,
         model: torch.nn.Module,
         x_unlabeled: torch.Tensor,
-        features: Optional[torch.Tensor] = None,
+        features: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Query samples balancing uncertainty and diversity.
@@ -136,9 +137,7 @@ class DiversitySampling:
                 # Compute diversity scores
                 selected_features = features[selected]
                 diversity_scores = (
-                    torch.cdist(features[available], selected_features)
-                    .min(dim=1)
-                    .values
+                    torch.cdist(features[available], selected_features).min(dim=1).values
                 )
 
                 # Normalize diversity
@@ -187,9 +186,9 @@ class CoreSetSelection:
         self,
         model: torch.nn.Module,
         x_unlabeled: torch.Tensor,
-        x_labeled: Optional[torch.Tensor] = None,
-        features_unlabeled: Optional[torch.Tensor] = None,
-        features_labeled: Optional[torch.Tensor] = None,
+        x_labeled: torch.Tensor | None = None,
+        features_unlabeled: torch.Tensor | None = None,
+        features_labeled: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Select core-set using greedy k-center.
@@ -229,9 +228,7 @@ class CoreSetSelection:
             centers = features_labeled
         else:
             # Start with empty set
-            centers = torch.empty(
-                0, features_unlabeled.size(1), device=features_unlabeled.device
-            )
+            centers = torch.empty(0, features_unlabeled.size(1), device=features_unlabeled.device)
 
         selected = []
 
@@ -272,7 +269,7 @@ class BadgeSampling:
         self.batch_size = batch_size
 
     @staticmethod
-    def _find_last_linear(model: torch.nn.Module) -> Optional[torch.nn.Linear]:
+    def _find_last_linear(model: torch.nn.Module) -> torch.nn.Linear | None:
         """Find the last nn.Linear layer in the model."""
         last_linear = None
         for module in model.modules():
@@ -301,9 +298,7 @@ class BadgeSampling:
         last_linear = self._find_last_linear(model)
         if last_linear is None:
             model.train(was_training)
-            raise ValueError(
-                "BadgeSampling requires a model with at least one nn.Linear layer"
-            )
+            raise ValueError("BadgeSampling requires a model with at least one nn.Linear layer")
 
         # Hook to capture the input to the last linear layer
         captured_features = []
@@ -368,11 +363,7 @@ class BadgeSampling:
         # Remaining points: proportional to distance from nearest selected
         for _ in range(min(self.batch_size - 1, len(embeddings) - 1)):
             # Compute distances to nearest selected point
-            dists = (
-                torch.cdist(embeddings[available], embeddings[selected])
-                .min(dim=1)
-                .values
-            )
+            dists = torch.cdist(embeddings[available], embeddings[selected]).min(dim=1).values
 
             # Sample proportionally to squared distance
             probs = (dists**2) / (dists**2).sum()
@@ -406,7 +397,7 @@ class QueryByCommittee:
 
     def __init__(
         self,
-        models: List[torch.nn.Module],
+        models: list[torch.nn.Module],
         batch_size: int = 100,
         disagreement: str = "vote_entropy",
     ):
@@ -417,8 +408,8 @@ class QueryByCommittee:
     @torch.no_grad()
     def query(
         self,
-        model: Optional[torch.nn.Module] = None,
-        x_unlabeled: Optional[torch.Tensor] = None,
+        model: torch.nn.Module | None = None,
+        x_unlabeled: torch.Tensor | None = None,
         **kwargs,
     ) -> torch.Tensor:
         """
@@ -444,7 +435,7 @@ class QueryByCommittee:
                 probs = F.softmax(logits, dim=-1)
                 predictions.append(probs)
         finally:
-            for member, was_training in zip(self.models, training_states):
+            for member, was_training in zip(self.models, training_states, strict=False):
                 member.train(was_training)
 
         predictions = torch.stack(predictions)  # (num_models, batch_size, num_classes)
@@ -455,9 +446,7 @@ class QueryByCommittee:
 
             # Count votes for each class
             num_classes = predictions.size(-1)
-            vote_counts = torch.zeros(
-                len(x_unlabeled), num_classes, device=x_unlabeled.device
-            )
+            vote_counts = torch.zeros(len(x_unlabeled), num_classes, device=x_unlabeled.device)
 
             for i in range(len(self.models)):
                 for j in range(len(x_unlabeled)):
@@ -475,10 +464,7 @@ class QueryByCommittee:
             for i in range(len(self.models)):
                 kl = (
                     predictions[i]
-                    * (
-                        torch.log(predictions[i] + 1e-10)
-                        - torch.log(mean_probs + 1e-10)
-                    )
+                    * (torch.log(predictions[i] + 1e-10) - torch.log(mean_probs + 1e-10))
                 ).sum(dim=-1)
                 scores += kl
 

@@ -6,8 +6,10 @@ in neural networks.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable, Tuple, Union
+from collections.abc import Callable
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -36,10 +38,7 @@ class BaseBayesianMethod(nn.Module, ABC):
         x: torch.Tensor,
         return_samples: bool = False,
         **kwargs,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Prediction with uncertainty estimation.
 
@@ -96,9 +95,7 @@ class MCDropout(BaseBayesianMethod):
         """Enable dropout at test time and optionally set dropout rate."""
         found = False
         for module in self.model.modules():
-            if isinstance(
-                module, (nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout)
-            ):
+            if isinstance(module, nn.Dropout | nn.Dropout2d | nn.Dropout3d | nn.AlphaDropout):
                 module.train()
                 # Override dropout rate if specified
                 if self.dropout_rate is not None:
@@ -123,10 +120,7 @@ class MCDropout(BaseBayesianMethod):
         x: torch.Tensor,
         return_samples: bool = False,
         normalize_output: bool = True,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Monte Carlo prediction with uncertainty estimation.
 
@@ -176,29 +170,31 @@ class MCDropout(BaseBayesianMethod):
         return entropy
 
     def predict_mutual_information(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Compute mutual information (epistemic uncertainty).
+        """Compute the BALD mutual-information score (epistemic uncertainty).
 
-        MI = H[y|x] - E[H[y|x,θ]]
+        ``MI = H[E_θ p(y|x,θ)] - E_θ H[p(y|x,θ)]``
+
+        The MI is computed on the same per-sample outputs used by
+        :meth:`predict`, so it is only meaningful when those outputs are valid
+        probability distributions over classes. Use the default
+        ``normalize_output=True`` for classification logits — otherwise MI is
+        computed on raw model outputs and is not interpretable as BALD.
 
         Args:
-            x: Input tensor
+            x: Input tensor of shape ``(N, ...)``.
 
         Returns:
-            Mutual information for each sample
+            Tensor of shape ``(N,)`` with non-negative MI values (up to
+            numerical noise). Higher values indicate higher epistemic
+            uncertainty.
         """
         _, _, samples = self.predict(x, return_samples=True)
 
-        # Expected entropy: E[H[y|x,θ]]
-        expected_entropy = (
-            -(samples * torch.log(samples + 1e-10)).sum(dim=-1).mean(dim=0)
-        )
+        expected_entropy = -(samples * torch.log(samples + 1e-10)).sum(dim=-1).mean(dim=0)
 
-        # Entropy of mean: H[E[y|x,θ]]
         mean_probs = samples.mean(dim=0)
         entropy_of_mean = -(mean_probs * torch.log(mean_probs + 1e-10)).sum(dim=-1)
 
-        # Mutual information
         mutual_info = entropy_of_mean - expected_entropy
         return mutual_info
 
@@ -242,7 +238,7 @@ class DeepEnsemble(BaseBayesianMethod):
         self.num_models = num_models
         self.models = nn.ModuleList([model_fn() for _ in range(num_models)])
 
-    def forward(self, x: torch.Tensor, model_idx: Optional[int] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, model_idx: int | None = None) -> torch.Tensor:
         """
         Forward pass through a specific model or all models.
 
@@ -265,19 +261,14 @@ class DeepEnsemble(BaseBayesianMethod):
         self,
         x: torch.Tensor,
         return_samples: bool = False,
-        return_all: bool = False,
         normalize_output: bool = True,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Ensemble prediction with uncertainty.
 
         Args:
             x: Input tensor ``(N, ...)``
             return_samples: If True, return all individual predictions
-            return_all: Deprecated alias for return_samples
             normalize_output: If True, apply softmax to 2-D multi-column
                 outputs (i.e. treat them as logits).  Set to False when
                 the model already returns probabilities or when outputs
@@ -289,7 +280,7 @@ class DeepEnsemble(BaseBayesianMethod):
             and captures epistemic (model) uncertainty.
             If return_samples=True: (mean, variance, all_predictions)
         """
-        _return = return_samples or return_all
+        _return = return_samples
 
         predictions = []
         for model in self.models:
@@ -334,7 +325,7 @@ class DeepEnsemble(BaseBayesianMethod):
         model = self.models[model_idx].to(device)
         model.train()
 
-        for epoch in range(num_epochs):
+        for _epoch in range(num_epochs):
             total_loss = 0
             for batch_x, batch_y in train_loader:
                 batch_x, batch_y = batch_x.to(device), batch_y.to(device)
@@ -455,9 +446,7 @@ class SWAG(BaseBayesianMethod):
 
         for name in self.mean.keys():
             # Compute variance
-            var = torch.clamp(
-                self.sq_mean[name] - self.mean[name] ** 2, min=self.var_clamp
-            )
+            var = torch.clamp(self.sq_mean[name] - self.mean[name] ** 2, min=self.var_clamp)
 
             # Sample from Gaussian
             std = torch.sqrt(var)
@@ -501,10 +490,7 @@ class SWAG(BaseBayesianMethod):
         x: torch.Tensor,
         return_samples: bool = False,
         normalize_output: bool = True,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         SWAG prediction with uncertainty.
 
@@ -655,9 +641,7 @@ class LaplaceApproximation(BaseBayesianMethod):
                 if self.likelihood == "classification":
                     loss = F.cross_entropy(output, batch_y[i : i + 1])
                 else:  # regression — Gaussian NLL with unit variance
-                    loss = 0.5 * F.mse_loss(
-                        output.squeeze(), batch_y[i : i + 1].float()
-                    )
+                    loss = 0.5 * F.mse_loss(output.squeeze(), batch_y[i : i + 1].float())
 
                 loss.backward()
 
@@ -684,9 +668,7 @@ class LaplaceApproximation(BaseBayesianMethod):
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         # Store MAP estimate (current weights)
-        self.mean = {
-            name: param.data.clone() for name, param in self.model.named_parameters()
-        }
+        self.mean = {name: param.data.clone() for name, param in self.model.named_parameters()}
 
         # Compute Hessian diagonal
         hessian_diag = self._compute_hessian_diag(data_loader, device)
@@ -702,10 +684,7 @@ class LaplaceApproximation(BaseBayesianMethod):
         x: torch.Tensor,
         return_samples: bool = False,
         normalize_output: bool = True,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Laplace prediction with uncertainty.
 
@@ -827,7 +806,7 @@ class VariationalBayesNN(BaseBayesianMethod):
     def __init__(
         self,
         in_features: int,
-        hidden_sizes: List[int],
+        hidden_sizes: list[int],
         out_features: int,
         prior_std: float = 1.0,
         num_samples: int = 20,
@@ -903,10 +882,7 @@ class VariationalBayesNN(BaseBayesianMethod):
         x: torch.Tensor,
         return_samples: bool = False,
         normalize_output: bool = True,
-    ) -> Union[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Variational prediction with uncertainty.
 
@@ -963,12 +939,8 @@ class GaussianLinear(nn.Module):
 
         # Variational parameters - initialize mu from prior N(0, prior_std)
         # This ensures initial KL ≈ 0 since posterior = prior at initialization
-        self.weight_mu = nn.Parameter(
-            torch.randn(out_features, in_features) * prior_std
-        )
-        self.weight_rho = nn.Parameter(
-            torch.full((out_features, in_features), init_rho)
-        )
+        self.weight_mu = nn.Parameter(torch.randn(out_features, in_features) * prior_std)
+        self.weight_rho = nn.Parameter(torch.full((out_features, in_features), init_rho))
         self.bias_mu = nn.Parameter(torch.zeros(out_features))
         self.bias_rho = nn.Parameter(torch.full((out_features,), init_rho))
 

@@ -6,13 +6,13 @@ import pytest
 import torch
 
 from incerto.bayesian.metrics import (
-    ensemble_diversity,
-    uncertainty_quality,
-    disagreement,
-    negative_log_likelihood,
     brier_score,
+    disagreement,
+    ensemble_diversity,
+    negative_log_likelihood,
     predictive_log_likelihood,
     sharpness,
+    uncertainty_quality,
 )
 
 

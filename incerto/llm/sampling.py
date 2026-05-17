@@ -6,10 +6,12 @@ and measure disagreement/diversity to estimate uncertainty.
 """
 
 from __future__ import annotations
-from typing import List, Callable
-import torch
-import numpy as np
+
 from collections import Counter
+from collections.abc import Callable
+
+import numpy as np
+import torch
 
 
 class SelfConsistency:
@@ -41,7 +43,7 @@ class SelfConsistency:
 
     @staticmethod
     def compute(
-        responses: List[str],
+        responses: list[str],
         normalize_fn: Callable[[str], str] | None = None,
     ) -> dict:
         """
@@ -93,7 +95,7 @@ class LexicalSimilarity:
 
     @staticmethod
     def exact_match_rate(
-        responses: List[str],
+        responses: list[str],
         normalize_fn: Callable[[str], str] | None = None,
     ) -> float:
         """
@@ -114,7 +116,7 @@ class LexicalSimilarity:
 
     @staticmethod
     def pairwise_token_overlap(
-        responses: List[str],
+        responses: list[str],
         normalize_fn: Callable[[str], str] | None = None,
     ) -> float:
         """
@@ -157,7 +159,7 @@ class VarianceRatio:
     """
 
     @staticmethod
-    def compute(predictions: List[int]) -> float:
+    def compute(predictions: list[int]) -> float:
         """
         Compute variance ratio.
 
@@ -181,7 +183,7 @@ class PredictiveEntropy:
     """
 
     @staticmethod
-    def compute(logit_samples: List[torch.Tensor]) -> torch.Tensor:
+    def compute(logit_samples: list[torch.Tensor]) -> torch.Tensor:
         """
         Compute predictive entropy from multiple samples.
 
@@ -219,35 +221,37 @@ class MutualInformation:
     """
 
     @staticmethod
-    def compute(logit_samples: List[torch.Tensor]) -> torch.Tensor:
-        """
-        Compute mutual information.
+    def compute(logit_samples: list[torch.Tensor]) -> torch.Tensor:
+        """Compute mutual information.
 
         Args:
-            logit_samples: List of logit tensors from different samples
+            logit_samples: List of logit tensors from different samples.
 
         Returns:
-            Mutual information value
+            Mutual information value (non-negative scalar tensor).
         """
         import torch.nn.functional as F
 
-        logits_stacked = torch.stack(logit_samples, dim=0)
+        # Cast to float32: float16 logits often produce 0 * -inf = NaN in
+        # softmax/log-softmax over large vocabularies.
+        logits_stacked = torch.stack(logit_samples, dim=0).float()
         probs = F.softmax(logits_stacked, dim=-1)
-
-        # Expected entropy: E[H(y|x, θ)]
         log_probs = F.log_softmax(logits_stacked, dim=-1)
-        entropies = -(probs * log_probs).sum(dim=-1)
+
+        # 0 * log(0) := 0 (avoid NaN from probs==0)
+        entropies = -torch.where(probs > 0, probs * log_probs, torch.zeros_like(probs)).sum(dim=-1)
         expected_entropy = entropies.mean(dim=0)
 
-        # Entropy of expected: H(E[y|x, θ])
         mean_probs = probs.mean(dim=0)
-        log_mean_probs = torch.log(mean_probs + 1e-10)
-        entropy_of_expected = -(mean_probs * log_mean_probs).sum(dim=-1)
+        log_mean_probs = torch.log(mean_probs.clamp(min=1e-12))
+        entropy_of_expected = -torch.where(
+            mean_probs > 0,
+            mean_probs * log_mean_probs,
+            torch.zeros_like(mean_probs),
+        ).sum(dim=-1)
 
-        # Mutual information: H[E[p]] - E[H[p]]
         mi = entropy_of_expected - expected_entropy
-
-        return mi
+        return mi.clamp(min=0.0)
 
 
 class SemanticEntropy:
@@ -264,7 +268,7 @@ class SemanticEntropy:
 
     @staticmethod
     def compute(
-        responses: List[str],
+        responses: list[str],
         similarity_threshold: float = 0.85,
         embedding_model=None,
         normalize_fn: Callable[[str], str] | None = None,
@@ -314,9 +318,7 @@ class SemanticEntropy:
                         words_i = set(responses[i].split())
                         words_j = set(responses[j].split())
                         if len(words_i | words_j) > 0:
-                            similarities[i, j] = len(words_i & words_j) / len(
-                                words_i | words_j
-                            )
+                            similarities[i, j] = len(words_i & words_j) / len(words_i | words_j)
 
         # Cluster using threshold
         clusters = [-1] * len(responses)
@@ -334,9 +336,7 @@ class SemanticEntropy:
 
         # Count cluster sizes
         cluster_counts = Counter(clusters)
-        cluster_probs = np.array(
-            [count / len(responses) for count in cluster_counts.values()]
-        )
+        cluster_probs = np.array([count / len(responses) for count in cluster_counts.values()])
 
         # Compute entropy
         semantic_entropy = -np.sum(cluster_probs * np.log(cluster_probs + 1e-10))
@@ -356,7 +356,7 @@ class EnsembleDisagreement:
     """
 
     @staticmethod
-    def compute(predictions: List[List[int]]) -> float:
+    def compute(predictions: list[list[int]]) -> float:
         """
         Compute disagreement rate.
 

@@ -6,6 +6,7 @@ during generation. They operate on token probability distributions.
 """
 
 from __future__ import annotations
+
 import torch
 import torch.nn.functional as F
 
@@ -116,9 +117,7 @@ class SurprisalScore:
         # Gather log probs for the actual tokens
         # log_probs: (batch, seq_len, vocab_size)
         # token_ids: (batch, seq_len) -> (batch, seq_len, 1)
-        token_log_probs = torch.gather(
-            log_probs, dim=-1, index=token_ids.unsqueeze(-1)
-        ).squeeze(-1)
+        token_log_probs = torch.gather(log_probs, dim=-1, index=token_ids.unsqueeze(-1)).squeeze(-1)
 
         # Surprisal is negative log probability
         surprisal = -token_log_probs

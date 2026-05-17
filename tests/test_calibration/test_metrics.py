@@ -4,20 +4,20 @@ Tests for calibration metrics.
 All metrics expect logits (not probabilities) and return Python floats (not tensors).
 """
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
 
 from incerto.calibration.metrics import (
-    nll,
+    _find_sigma_star,
+    _smece_at_sigma,
+    adaptive_ece_score,
     brier_score,
+    classwise_ece,
     ece_score,
     mce_score,
-    classwise_ece,
-    adaptive_ece_score,
+    nll,
     smooth_ece,
-    _smece_at_sigma,
-    _find_sigma_star,
 )
 
 
@@ -348,9 +348,7 @@ class TestAdaptiveECE:
     def test_different_bins(self, multiclass_logits, multiclass_labels):
         """Test Adaptive ECE with different number of bins."""
         for n_bins in [5, 10, 15, 20]:
-            aece = adaptive_ece_score(
-                multiclass_logits, multiclass_labels, n_bins=n_bins
-            )
+            aece = adaptive_ece_score(multiclass_logits, multiclass_labels, n_bins=n_bins)
             assert isinstance(aece, float)
             assert 0 <= aece <= 1
             assert np.isfinite(aece)
@@ -394,9 +392,7 @@ class TestAdaptiveECE:
     def test_comparison_with_standard_ece(self, multiclass_logits, multiclass_labels):
         """Test Adaptive ECE vs standard ECE."""
         ece = ece_score(multiclass_logits, multiclass_labels, n_bins=10)
-        aece = adaptive_ece_score(
-            multiclass_logits, multiclass_labels, n_bins=10, norm="l1"
-        )
+        aece = adaptive_ece_score(multiclass_logits, multiclass_labels, n_bins=10, norm="l1")
 
         # Both should be in valid range
         assert 0 <= ece <= 1

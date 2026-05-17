@@ -16,80 +16,79 @@ Submodules:
 """
 
 # Token-level uncertainty
-from .token import (
-    TokenEntropy,
-    TokenConfidence,
-    TokenPerplexity,
-    SurprisalScore,
-    TopKConfidence,
-)
-
-# Sequence-level uncertainty
-from .sequence import (
-    SequenceProbability,
-    AverageLogProb,
-    NormalizedSequenceProb,
-    SequenceEntropy,
-    SequencePerplexity,
-    VarianceOfTokenProbs,
-)
-
-# Sampling-based uncertainty
-from .sampling import (
-    SelfConsistency,
-    LexicalSimilarity,
-    VarianceRatio,
-    PredictiveEntropy,
-    MutualInformation,
-    SemanticEntropy,
-    EnsembleDisagreement,
+# Calibration
+from .calibration import (
+    HistogramBinning,
+    SequenceLengthCalibration,
+    TokenTemperatureScaling,
+    VerbosityBiasCorrection,
 )
 
 # Generation-specific uncertainty
 from .generation import (
     BeamSearchUncertainty,
-    NucleusSamplingUncertainty,
-    IDontKnowDetection,
     ContrastiveDecoding,
-)
-
-# Verbalized uncertainty
-from .verbalized import (
-    VerbalizedConfidence,
-    PTrue,
-    SelfEvaluation,
-    BidirectionalConsistency,
-)
-
-# Calibration
-from .calibration import (
-    TokenTemperatureScaling,
-    SequenceLengthCalibration,
-    VerbosityBiasCorrection,
-    HistogramBinning,
+    IDontKnowDetection,
+    NucleusSamplingUncertainty,
 )
 
 # Metrics
 from .metrics import (
-    selective_accuracy,
-    calibration_error,
-    brier_score,
     aur_c,
-    uncertainty_auc,
-    token_level_accuracy,
-    sequence_level_accuracy,
+    brier_score,
+    calibration_error,
     f1_score_tokens,
+    selective_accuracy,
+    sequence_level_accuracy,
+    token_level_accuracy,
+    uncertainty_auc,
+)
+
+# Sampling-based uncertainty
+from .sampling import (
+    EnsembleDisagreement,
+    LexicalSimilarity,
+    MutualInformation,
+    PredictiveEntropy,
+    SelfConsistency,
+    SemanticEntropy,
+    VarianceRatio,
+)
+
+# Sequence-level uncertainty
+from .sequence import (
+    AverageLogProb,
+    NormalizedSequenceProb,
+    SequenceEntropy,
+    SequencePerplexity,
+    SequenceProbability,
+    VarianceOfTokenProbs,
+)
+from .token import (
+    SurprisalScore,
+    TokenConfidence,
+    TokenEntropy,
+    TokenPerplexity,
+    TopKConfidence,
+)
+
+# Verbalized uncertainty
+from .verbalized import (
+    BidirectionalConsistency,
+    PTrue,
+    SelfEvaluation,
+    VerbalizedConfidence,
 )
 
 # Visualization
 from .visual import (
-    plot_token_uncertainty,
     plot_confidence_vs_correctness,
     plot_generation_diversity,
-    plot_semantic_clusters,
-    plot_risk_coverage_llm,
-    plot_uncertainty_distribution,
     plot_length_vs_confidence,
+    plot_risk_coverage_llm,
+    plot_semantic_clusters,
+    plot_token_uncertainty,
+    plot_uncertainty_distribution,
 )
 
 __all__ = [

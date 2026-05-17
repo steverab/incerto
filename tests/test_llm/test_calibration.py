@@ -5,10 +5,10 @@ Tests for LLM calibration methods.
 import torch
 
 from incerto.llm import (
-    TokenTemperatureScaling,
-    SequenceLengthCalibration,
-    VerbosityBiasCorrection,
     HistogramBinning,
+    SequenceLengthCalibration,
+    TokenTemperatureScaling,
+    VerbosityBiasCorrection,
 )
 
 

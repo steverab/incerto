@@ -3,10 +3,10 @@ Metrics for evaluating Bayesian deep learning models.
 """
 
 from __future__ import annotations
-import math
-import torch
-from typing import Tuple
 
+import math
+
+import torch
 from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score
 
@@ -50,10 +50,7 @@ def ensemble_diversity(
                 kl = (
                     (
                         predictions[i]
-                        * (
-                            torch.log(predictions[i] + 1e-10)
-                            - torch.log(predictions[j] + 1e-10)
-                        )
+                        * (torch.log(predictions[i] + 1e-10) - torch.log(predictions[j] + 1e-10))
                     )
                     .sum(dim=-1)
                     .mean()
@@ -70,7 +67,7 @@ def ensemble_diversity(
 def uncertainty_quality(
     uncertainties: torch.Tensor,
     errors: torch.Tensor,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Evaluate quality of uncertainty estimates.
 

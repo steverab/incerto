@@ -6,18 +6,19 @@ used in uncertainty quantification research.
 """
 
 from __future__ import annotations
+
 import torch
 from torch.utils.data import Dataset, Subset
 
 try:
     from torchvision import datasets, transforms
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "torchvision is required for incerto.data.ood_benchmarks. "
         "Install it with: pip install incerto[vision]"
-    )
-from typing import Tuple, List
+    ) from err
 from pathlib import Path
+
 import numpy as np
 
 
@@ -33,7 +34,7 @@ class OODBenchmark:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """
         Get ID and OOD datasets.
 
@@ -69,7 +70,7 @@ class MNIST_vs_FashionMNIST(OODBenchmark):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get MNIST (ID) and Fashion-MNIST (OOD) test sets."""
         transform = self.get_transforms()
 
@@ -120,7 +121,7 @@ class CIFAR10_vs_CIFAR100(OODBenchmark):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get CIFAR-10 (ID) and CIFAR-100 (OOD) test sets."""
         transform = self.get_transforms()
 
@@ -171,7 +172,7 @@ class CIFAR10_vs_SVHN(OODBenchmark):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get CIFAR-10 (ID) and SVHN (OOD) test sets."""
         transform = self.get_transforms()
 
@@ -217,7 +218,7 @@ class MNIST_vs_NotMNIST(OODBenchmark):
 
         return transforms.Compose(transform_list)
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get MNIST (ID) and NotMNIST (OOD) test sets."""
         id_transform = self.get_transforms()
 
@@ -265,8 +266,8 @@ class SubclassOOD(OODBenchmark):
         self,
         dataset_class,
         root: str | Path = "./data",
-        id_classes: List[int] = None,
-        ood_classes: List[int] = None,
+        id_classes: list[int] = None,
+        ood_classes: list[int] = None,
         transform: transforms.Compose = None,
         **dataset_kwargs,
     ):
@@ -288,12 +289,10 @@ class SubclassOOD(OODBenchmark):
         self.transform = transform if transform is not None else transforms.ToTensor()
         self.dataset_kwargs = dataset_kwargs
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get ID and OOD subsets."""
         if self.id_classes is None and self.ood_classes is None:
-            raise ValueError(
-                "At least one of id_classes or ood_classes must be specified"
-            )
+            raise ValueError("At least one of id_classes or ood_classes must be specified")
 
         # Load full dataset; default to test split if not specified
         kwargs = dict(root=self.root, download=True, transform=self.transform)
@@ -390,7 +389,7 @@ class CorruptedDataOOD(OODBenchmark):
         else:
             raise ValueError(f"Unknown corruption type: {self.corruption_type}")
 
-    def get_datasets(self) -> Tuple[Dataset, Dataset]:
+    def get_datasets(self) -> tuple[Dataset, Dataset]:
         """Get ID (clean) and OOD (corrupted) datasets."""
         # ID is the original dataset
         id_dataset = self.dataset
@@ -444,8 +443,6 @@ def get_ood_benchmark(
     }
 
     if name not in benchmarks:
-        raise ValueError(
-            f"Unknown benchmark: {name}. " f"Available: {list(benchmarks.keys())}"
-        )
+        raise ValueError(f"Unknown benchmark: {name}. " f"Available: {list(benchmarks.keys())}")
 
     return benchmarks[name](root=root, **kwargs)

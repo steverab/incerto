@@ -8,14 +8,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from incerto.active.acquisition import (
-    RandomAcquisition,
+    BALDAcquisition,
+    BatchBALDAcquisition,
     EntropyAcquisition,
     LeastConfidenceAcquisition,
     MarginAcquisition,
-    BALDAcquisition,
-    VarianceRatioAcquisition,
     MeanSTDAcquisition,
-    BatchBALDAcquisition,
+    RandomAcquisition,
+    VarianceRatioAcquisition,
 )
 
 
