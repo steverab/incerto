@@ -12,7 +12,7 @@ Submodules:
     - active: Active learning for efficient data labeling
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Core utilities
 # Submodules - import them so users can do `from incerto import calibration`
