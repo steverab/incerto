@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-05-17
+
+### Fixed
+
+- **`import incerto` fails without `[vision]` extra** (regression in 0.1.0).
+  `incerto.data.__init__` eagerly imported torchvision-dependent submodules
+  (`vision`, `ood_benchmarks`) at package import time, breaking the base
+  install for every user who didn't install `incerto[vision]`. Vision-related
+  symbols are now imported conditionally; calling them without the extra
+  still raises a clear ImportError, but the rest of the package imports
+  cleanly. ([incerto/data/__init__.py](incerto/data/__init__.py))
+
+### Yanked
+
+- **0.1.0** is yanked on PyPI due to the broken base install above. Users on
+  `pip install incerto` (no extras) should upgrade to 0.1.1.
+
 ## [0.1.0] - 2026-05-15
 
 Initial release of incerto, a comprehensive Python library for uncertainty quantification in machine learning.
